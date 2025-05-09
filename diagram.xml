@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 800 2200">
+  <style>
+    .component { fill: #e1f5fe; stroke: #0288d1; stroke-width: 2; }
+    .layer-box { fill: #f5f5f5; stroke: #757575; stroke-width: 2; stroke-dasharray: 5,3; }
+    .arrow { stroke: #424242; stroke-width: 1.5; marker-end: url(#arrowhead); }
+    .layer-title { font-family: Arial; font-size: 18px; font-weight: bold; }
+    .component-title { font-family: Arial; font-size: 14px; font-weight: bold; }
+    .component-text { font-family: Arial; font-size: 12px; }
+    .flow-title { font-family: Arial; font-size: 16px; font-weight: bold; text-anchor: middle; }
+    .interface-text { font-family: Arial; font-size: 11px; font-style: italic; }
+  </style>
+  
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#424242" />
+    </marker>
+  </defs>
+  
+  <!-- Layer 1: Log Collection & Monitoring -->
+  <rect x="50" y="50" width="700" height="350" class="layer-box" />
+  <text x="75" y="80" class="layer-title">Layer 1: Log Collection &amp; Monitoring</text>
+  
+  <!-- Layer 1 Components -->
+  <rect x="100" y="100" width="180" height="100" rx="5" class="component" />
+  <text x="190" y="125" text-anchor="middle" class="component-title">Log Collector Service</text>
+  <text x="190" y="145" text-anchor="middle" class="component-text">Captures logs from various</text>
+  <text x="190" y="165" text-anchor="middle" class="component-text">sources in real-time</text>
+  
+  <rect x="370" y="100" width="180" height="100" rx="5" class="component" />
+  <text x="460" y="125" text-anchor="middle" class="component-title">Log Parser &amp; Normalizer</text>
+  <text x="460" y="145" text-anchor="middle" class="component-text">Transforms raw logs into</text>
+  <text x="460" y="165" text-anchor="middle" class="component-text">structured data</text>
+  
+  <rect x="100" y="250" width="180" height="100" rx="5" class="component" />
+  <text x="190" y="275" text-anchor="middle" class="component-title">Error Detection Engine</text>
+  <text x="190" y="295" text-anchor="middle" class="component-text">Identifies error patterns</text>
+  <text x="190" y="315" text-anchor="middle" class="component-text">in normalized logs</text>
+  
+  <rect x="370" y="250" width="180" height="100" rx="5" class="component" />
+  <text x="460" y="275" text-anchor="middle" class="component-title">Operational Context Collector</text>
+  <text x="460" y="295" text-anchor="middle" class="component-text">Gathers system state</text>
+  <text x="460" y="315" text-anchor="middle" class="component-text">at error time</text>
+  
+  <!-- Layer 1 Arrows -->
+  <line x1="280" y1="150" x2="370" y2="150" class="arrow" />
+  <line x1="190" y1="200" x2="190" y2="250" class="arrow" />
+  <line x1="460" y1="200" x2="190" y2="250" class="arrow" />
+  <line x1="280" y1="300" x2="370" y2="300" class="arrow" />
+  
+  <!-- Layer 2: Error Analysis -->
+  <rect x="50" y="450" width="700" height="350" class="layer-box" />
+  <text x="75" y="480" class="layer-title">Layer 2: Error Analysis</text>
+  
+  <!-- Layer 2 Components -->
+  <rect x="100" y="500" width="180" height="100" rx="5" class="component" />
+  <text x="190" y="525" text-anchor="middle" class="component-title">Error Classification Service</text>
+  <text x="190" y="545" text-anchor="middle" class="component-text">Categorizes errors by type,</text>
+  <text x="190" y="565" text-anchor="middle" class="component-text">component, and severity</text>
+  
+  <rect x="370" y="500" width="180" height="100" rx="5" class="component" />
+  <text x="460" y="525" text-anchor="middle" class="component-title">Stack Trace Analyzer</text>
+  <text x="460" y="545" text-anchor="middle" class="component-text">Extracts execution path</text>
+  <text x="460" y="565" text-anchor="middle" class="component-text">that led to the error</text>
+  
+  <rect x="100" y="650" width="180" height="100" rx="5" class="component" />
+  <text x="190" y="675" text-anchor="middle" class="component-title">Root Cause Analyzer</text>
+  <text x="190" y="695" text-anchor="middle" class="component-text">Determines underlying issue</text>
+  <text x="190" y="715" text-anchor="middle" class="component-text">from error patterns</text>
+  
+  <rect x="370" y="650" width="180" height="100" rx="5" class="component" />
+  <text x="460" y="675" text-anchor="middle" class="component-title">Code Context Service</text>
+  <text x="460" y="695" text-anchor="middle" class="component-text">Retrieves relevant code</text>
+  <text x="460" y="715" text-anchor="middle" class="component-text">segments for analysis</text>
+  
+  <!-- Layer 2 Arrows -->
+  <line x1="190" y1="400" x2="190" y2="500" class="arrow" />
+  <line x1="190" y1="600" x2="190" y2="650" class="arrow" />
+  <line x1="460" y1="600" x2="190" y2="650" class="arrow" />
+  <line x1="280" y1="700" x2="370" y2="700" class="arrow" />
+  
+  <!-- Layer 3: Fix Generation -->
+  <rect x="50" y="850" width="700" height="350" class="layer-box" />
+  <text x="75" y="880" class="layer-title">Layer 3: Fix Generation</text>
+  
+  <!-- Layer 3 Components -->
+  <rect x="100" y="900" width="180" height="100" rx="5" class="component" />
+  <text x="190" y="925" text-anchor="middle" class="component-title">Fix Strategy Selector</text>
+  <text x="190" y="945" text-anchor="middle" class="component-text">Determines appropriate</text>
+  <text x="190" y="965" text-anchor="middle" class="component-text">fix approach</text>
+  
+  <rect x="370" y="900" width="180" height="100" rx="5" class="component" />
+  <text x="460" y="925" text-anchor="middle" class="component-title">Code Synthesis Engine</text>
+  <text x="460" y="945" text-anchor="middle" class="component-text">Generates code patches</text>
+  <text x="460" y="965" text-anchor="middle" class="component-text">based on analysis</text>
+  
+  <rect x="100" y="1050" width="180" height="100" rx="5" class="component" />
+  <text x="190" y="1075" text-anchor="middle" class="component-title">Fix Verification Service</text>
+  <text x="190" y="1095" text-anchor="middle" class="component-text">Validates generated fixes</text>
+  <text x="190" y="1115" text-anchor="middle" class="component-text">for correctness</text>
+  
+  <rect x="370" y="1050" width="180" height="100" rx="5" class="component" />
+  <text x="460" y="1075" text-anchor="middle" class="component-title">Test Generator</text>
+  <text x="460" y="1095" text-anchor="middle" class="component-text">Creates tests to</text>
+  <text x="460" y="1115" text-anchor="middle" class="component-text">validate fixes</text>
+  
+  <!-- Layer 3 Arrows -->
+  <line x1="190" y1="800" x2="190" y2="900" class="arrow" />
+  <line x1="280" y1="950" x2="370" y2="950" class="arrow" />
+  <line x1="460" y1="1000" x2="190" y2="1050" class="arrow" />
+  <line x1="280" y1="1100" x2="370" y2="1100" class="arrow" />
+  
+  <!-- Layer 4: Validation & Deployment -->
+  <rect x="50" y="1250" width="700" height="400" class="layer-box" />
+  <text x="75" y="1280" class="layer-title">Layer 4: Validation &amp; Deployment</text>
+  
+  <!-- Layer 4 Components -->
+  <rect x="100" y="1300" width="180" height="100" rx="5" class="component" />
+  <text x="190" y="1325" text-anchor="middle" class="component-title">Sandbox Testing Environment</text>
+  <text x="190" y="1345" text-anchor="middle" class="component-text">Executes fixes in</text>
+  <text x="190" y="1365" text-anchor="middle" class="component-text">isolated context</text>
+  
+  <rect x="370" y="1300" width="180" height="100" rx="5" class="component" />
+  <text x="460" y="1325" text-anchor="middle" class="component-title">Test Suite Runner</text>
+  <text x="460" y="1345" text-anchor="middle" class="component-text">Verifies fixes against</text>
+  <text x="460" y="1365" text-anchor="middle" class="component-text">comprehensive tests</text>
+  
+  <rect x="100" y="1450" width="180" height="100" rx="5" class="component" />
+  <text x="190" y="1475" text-anchor="middle" class="component-title">Deployment Manager</text>
+  <text x="190" y="1495" text-anchor="middle" class="component-text">Handles safe rollout</text>
+  <text x="190" y="1515" text-anchor="middle" class="component-text">of fixes</text>
+  
+  <rect x="370" y="1450" width="180" height="100" rx="5" class="component" />
+  <text x="460" y="1475" text-anchor="middle" class="component-title">Rollback Service</text>
+  <text x="460" y="1495" text-anchor="middle" class="component-text">Reverts changes if</text>
+  <text x="460" y="1515" text-anchor="middle" class="component-text">problems detected</text>
+  
+  <rect x="550" y="1375" width="180" height="100" rx="5" class="component" />
+  <text x="640" y="1400" text-anchor="middle" class="component-title">Human Approval Interface</text>
+  <text x="640" y="1420" text-anchor="middle" class="component-text">Enables human oversight</text>
+  <text x="640" y="1440" text-anchor="middle" class="component-text">for critical changes</text>
+  
+  <!-- Layer 4 Arrows -->
+  <line x1="460" y1="1150" x2="190" y2="1300" class="arrow" />
+  <line x1="280" y1="1350" x2="370" y2="1350" class="arrow" />
+  <line x1="460" y1="1400" x2="190" y2="1450" class="arrow" />
+  <line x1="280" y1="1500" x2="370" y2="1500" class="arrow" />
+  <line x1="190" y1="1450" x2="550" y2="1425" class="arrow" />
+  <line x1="640" y1="1475" x2="190" y2="1500" class="arrow" />
+  
+  <!-- Layer 5: Knowledge Management -->
+  <rect x="50" y="1700" width="700" height="350" class="layer-box" />
+  <text x="75" y="1730" class="layer-title">Layer 5: Knowledge Management</text>
+  
+  <!-- Layer 5 Components -->
+  <rect x="100" y="1750" width="180" height="100" rx="5" class="component" />
+  <text x="190" y="1775" text-anchor="middle" class="component-title">Error-Fix Knowledge Base</text>
+  <text x="190" y="1795" text-anchor="middle" class="component-text">Stores mappings between</text>
+  <text x="190" y="1815" text-anchor="middle" class="component-text">errors and fixes</text>
+  
+  <rect x="370" y="1750" width="180" height="100" rx="5" class="component" />
+  <text x="460" y="1775" text-anchor="middle" class="component-title">Learning Feedback Engine</text>
+  <text x="460" y="1795" text-anchor="middle" class="component-text">Improves fix generation</text>
+  <text x="460" y="1815" text-anchor="middle" class="component-text">over time</text>
+  
+  <rect x="235" y="1900" width="180" height="100" rx="5" class="component" />
+  <text x="325" y="1925" text-anchor="middle" class="component-title">Documentation Generator</text>
+  <text x="325" y="1945" text-anchor="middle" class="component-text">Creates records of</text>
+  <text x="325" y="1965" text-anchor="middle" class="component-text">bugs and fixes</text>
+  
+  <!-- Layer 5 Arrows -->
+  <line x1="190" y1="1600" x2="190" y2="1750" class="arrow" />
+  <line x1="280" y1="1800" x2="370" y2="1800" class="arrow" />
+  <line x1="190" y1="1850" x2="235" y2="1900" class="arrow" />
+  <line x1="460" y1="1850" x2="325" y2="1900" class="arrow" />
+  
+  <!-- Cross-layer connection -->
+  <line x1="460" y1="1850" x2="650" y2="1850" class="arrow" />
+  <line x1="650" y1="1850" x2="650" y2="925" stroke="#424242" stroke-width="1.5" stroke-dasharray="5,3" />
+  <line x1="650" y1="925" x2="550" y2="925" class="arrow" />
+  <text x="650" y="1100" transform="rotate(90 650,1100)" class="interface-text" text-anchor="middle">Feedback Loop to Improve Code Generation</text>
+  
+  <!-- Layer connection arrows -->
+  <line x1="190" y1="350" x2="190" y2="450" class="arrow" />
+  <line x1="190" y1="750" x2="190" y2="850" class="arrow" />
+  <line x1="460" y1="1150" x2="460" y2="1250" class="arrow" />
+  <line x1="190" y1="1550" x2="190" y2="1700" class="arrow" />
+  
+  <!-- Data Flow title -->
+  <text x="400" y="2060" class="flow-title">System Data Flow</text>
+  <text x="400" y="2080" class="component-text" text-anchor="middle">Error detection → Analysis → Fix generation → Validation → Deployment → Knowledge capture → Continuous improvement</text>
+</svg>
