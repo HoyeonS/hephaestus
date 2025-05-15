@@ -31,8 +31,16 @@ type HephaestusClient struct {
 	config *HephaestusConfig
 }
 
-// Config represents the client configuration
+// HephaestusConfig represents the client configuration
 type HephaestusConfig struct {
+	// Service-specific configurations
+	CollectorConfig  collector.Config  `yaml:"collector"`   // Configuration for the collector service
+	AnalyzerConfig   analyzer.Config   `yaml:"analyzer"`    // Configuration for the analyzer service
+	GeneratorConfig  generator.Config  `yaml:"generator"`   // Configuration for the generator service
+	DeploymentConfig deployment.Config `yaml:"deployment"`  // Configuration for the deployment service
+	KnowledgeConfig  knowledge.Config  `yaml:"knowledge"`   // Configuration for the knowledge base service
+
+	// General settings
 	LogFormat          string        `yaml:"log_format"`          // "json", "text", or "structured"
 	TimeFormat         string        `yaml:"time_format"`         // time format string for parsing timestamps
 	ContextTimeWindow  time.Duration `yaml:"context_time_window"` // time window for collecting context around errors
@@ -139,7 +147,7 @@ func (c *HephaestusClient) Start(ctx context.Context) error {
 }
 
 // Stop stops the Hephaestus client
-func (c *HephaestusClient) Stop() error {
+func (c *HephaestusClient) Stop(ctx context.Context) error {
 	if err := c.collector.Stop(); err != nil {
 		return fmt.Errorf("failed to stop collector: %v", err)
 	}
@@ -206,7 +214,7 @@ func (c *HephaestusClient) processPipeline(ctx context.Context) {
 			}
 
 			// Check if we should apply the fix directly or suggest it
-			if c.config.GeneratorConfig.AIModel.FixMode == "direct" {
+			if c.config.AIProvider == "direct" {
 				c.deployment.GetInputChannel() <- fix
 			} else {
 				// Convert fix to suggestion
