@@ -208,7 +208,7 @@ func (s *Service) processContent(source string, content []byte) {
 	// Create and send error event
 	errEvent := &models.Error{
 		Source:    source,
-		Content:   string(content),
+		Message:   string(content),
 		Timestamp: time.Now(),
 	}
 

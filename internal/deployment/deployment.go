@@ -303,4 +303,19 @@ func applyCodeChange(change models.CodeChange) error {
 	// Implementation would apply the code change to the file
 	// This is a placeholder
 	return nil
+}
+
+// applyFixInSandbox applies a fix in the sandbox environment
+func (s *Service) applyFixInSandbox(sandbox string, fix *models.Fix) error {
+	for _, change := range fix.CodeChanges {
+		dstPath := filepath.Join(sandbox, filepath.Base(change.FilePath))
+		if err := applyCodeChange(models.CodeChange{
+			FilePath: dstPath,
+			Content:  change.Content,
+			Type:     change.Type,
+		}); err != nil {
+			return fmt.Errorf("failed to apply change in sandbox: %v", err)
+		}
+	}
+	return nil
 } 

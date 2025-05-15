@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"sync"
-	"time"
 
 	"github.com/HoyeonS/hephaestus/internal/models"
 )
@@ -166,9 +165,9 @@ func (s *Service) analyzeCodeContext(err *models.Error) {
 	}
 
 	// Get code context around the error line
-	context, err := getCodeContext(err.FileName, err.LineNumber, s.config.ContextLines)
-	if err != nil {
-		fmt.Printf("Failed to get code context: %v\n", err)
+	context, getContextErr := getCodeContext(err.FileName, err.LineNumber, s.config.ContextLines)
+	if getContextErr != nil {
+		fmt.Printf("Failed to get code context: %v\n", getContextErr)
 		return
 	}
 
