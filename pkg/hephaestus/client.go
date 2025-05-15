@@ -47,79 +47,6 @@ type Client interface {
 	TestConnectivity(ctx context.Context) error
 }
 
-// Config represents the client configuration
-type Config struct {
-	// Log settings
-	LogFormat      string `yaml:"log_format"`      // "json", "text", or "structured"
-	LogLevel       string `yaml:"log_level"`       // "debug", "info", "warn", "error"
-	LogFile        string `yaml:"log_file"`        // Path to log file (empty for stdout)
-	LogColorized   bool   `yaml:"log_colorized"`   // Whether to colorize log output
-
-	// Error detection settings
-	ErrorPatterns    map[string]string `yaml:"error_patterns"`     // Map of error pattern name to regex
-	MinErrorSeverity int              `yaml:"min_error_severity"`  // Minimum severity level to process
-
-	// Fix generation settings
-	MaxFixAttempts int           `yaml:"max_fix_attempts"` // Maximum number of fix attempts per error
-	FixTimeout     time.Duration `yaml:"fix_timeout"`      // Timeout for fix generation
-
-	// API settings
-	APIEndpoint string `yaml:"api_endpoint"` // Hephaestus API endpoint
-	APIToken    string `yaml:"api_token"`    // API authentication token
-}
-
-// Validate validates the client configuration
-func (c *Config) Validate() error {
-	// Validate log format
-	validFormats := map[string]bool{
-		"json":       true,
-		"text":       true,
-		"structured": true,
-	}
-	if !validFormats[c.LogFormat] {
-		return fmt.Errorf("invalid log format: %s (must be one of: json, text, structured)", c.LogFormat)
-	}
-
-	// Validate log level
-	validLevels := map[string]bool{
-		"debug": true,
-		"info":  true,
-		"warn":  true,
-		"error": true,
-	}
-	if !validLevels[c.LogLevel] {
-		return fmt.Errorf("invalid log level: %s (must be one of: debug, info, warn, error)", c.LogLevel)
-	}
-
-	// Validate error patterns
-	if len(c.ErrorPatterns) == 0 {
-		return fmt.Errorf("at least one error pattern must be defined")
-	}
-
-	// Validate severity
-	if c.MinErrorSeverity < 0 {
-		return fmt.Errorf("min_error_severity must be >= 0")
-	}
-
-	// Validate fix generation settings
-	if c.MaxFixAttempts <= 0 {
-		return fmt.Errorf("max_fix_attempts must be > 0")
-	}
-	if c.FixTimeout <= 0 {
-		return fmt.Errorf("fix_timeout must be > 0")
-	}
-
-	// Validate API settings
-	if c.APIEndpoint == "" {
-		return fmt.Errorf("api_endpoint is required")
-	}
-	if c.APIToken == "" {
-		return fmt.Errorf("api_token is required")
-	}
-
-	return nil
-}
-
 // Error represents a detected error with its context and potential fix
 type Error struct {
 	Message    string
@@ -154,25 +81,6 @@ type SystemHealth struct {
 	Message   string
 	Details   map[string]interface{}
 	Timestamp time.Time
-}
-
-// NewDefaultConfig creates a new configuration with sensible defaults
-func NewDefaultConfig() *Config {
-	return &Config{
-		LogFormat:        "text",
-		LogLevel:         "info",
-		LogColorized:     true,
-		MinErrorSeverity: 1,
-		MaxFixAttempts:   3,
-		FixTimeout:       30 * time.Second,
-		ErrorPatterns: map[string]string{
-			"panic":         `panic:.*`,
-			"fatal":         `fatal:.*`,
-			"error":         `error:.*`,
-			"segmentation": `segmentation fault.*`,
-		},
-		APIEndpoint: "http://localhost:8080", // Default to local development
-	}
 }
 
 // NewClient creates a new Hephaestus client with the given configuration
