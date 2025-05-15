@@ -35,93 +35,66 @@ var levelNames = map[Level]string{
 	FATAL: "FATAL",
 }
 
-// Logger represents a logger instance
+// Logger provides structured logging with colors
 type Logger struct {
-	level     Level
 	component string
-	colored   bool
+	level     Level
 }
 
-// New creates a new logger instance
+// New creates a new logger for a component
 func New(component string, level Level) *Logger {
 	return &Logger{
-		level:     level,
 		component: component,
-		colored:   true,
+		level:     level,
 	}
 }
 
-// DisableColor disables colored output
-func (l *Logger) DisableColor() {
-	l.colored = false
-}
-
-// formatMessage formats a log message with timestamp, level, and component
-func (l *Logger) formatMessage(level Level, msg string, args ...interface{}) string {
-	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
-	formattedMsg := fmt.Sprintf(msg, args...)
-	
-	baseMsg := fmt.Sprintf("[%s] [%s] [%s] %s",
-		timestamp,
-		levelNames[level],
-		l.component,
-		formattedMsg)
-	
-	if l.colored {
-		return levelColors[level].Sprint(baseMsg)
-	}
-	return baseMsg
-}
-
-// log logs a message at the specified level
-func (l *Logger) log(level Level, msg string, args ...interface{}) {
+// log prints a colored log message
+func (l *Logger) log(level Level, format string, args ...interface{}) {
 	if level < l.level {
 		return
 	}
-	
-	formattedMsg := l.formatMessage(level, msg, args...)
-	if level == FATAL {
-		fmt.Fprintln(os.Stderr, formattedMsg)
-		os.Exit(1)
-	} else if level == ERROR {
-		fmt.Fprintln(os.Stderr, formattedMsg)
-	} else {
-		fmt.Println(formattedMsg)
-	}
-}
 
-// WithComponent creates a new logger with a different component name
-func (l *Logger) WithComponent(component string) *Logger {
-	return &Logger{
-		level:     l.level,
-		component: component,
-		colored:   l.colored,
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	message := fmt.Sprintf(format, args...)
+
+	switch level {
+	case DEBUG:
+		color.Cyan("[%s] [DEBUG] [%s] %s", timestamp, l.component, message)
+	case INFO:
+		color.Green("[%s] [INFO] [%s] %s", timestamp, l.component, message)
+	case WARN:
+		color.Yellow("[%s] [WARN] [%s] %s", timestamp, l.component, message)
+	case ERROR:
+		color.Red("[%s] [ERROR] [%s] %s", timestamp, l.component, message)
+	case FATAL:
+		color.HiRed("[%s] [FATAL] [%s] %s", timestamp, l.component, message)
 	}
 }
 
 // Debug logs a debug message
-func (l *Logger) Debug(msg string, args ...interface{}) {
-	l.log(DEBUG, msg, args...)
+func (l *Logger) Debug(format string, args ...interface{}) {
+	l.log(DEBUG, format, args...)
 }
 
 // Info logs an info message
-func (l *Logger) Info(msg string, args ...interface{}) {
-	l.log(INFO, msg, args...)
+func (l *Logger) Info(format string, args ...interface{}) {
+	l.log(INFO, format, args...)
 }
 
 // Warn logs a warning message
-func (l *Logger) Warn(msg string, args ...interface{}) {
-	l.log(WARN, msg, args...)
+func (l *Logger) Warn(format string, args ...interface{}) {
+	l.log(WARN, format, args...)
 }
 
 // Error logs an error message
-func (l *Logger) Error(msg string, args ...interface{}) {
-	l.log(ERROR, msg, args...)
+func (l *Logger) Error(format string, args ...interface{}) {
+	l.log(ERROR, format, args...)
 }
 
-// Fatal logs a fatal message and exits
-func (l *Logger) Fatal(msg string, args ...interface{}) {
-	l.log(FATAL, msg, args...)
+// Fatal logs a fatal message
+func (l *Logger) Fatal(format string, args ...interface{}) {
+	l.log(FATAL, format, args...)
 }
 
 // DebugWithFields logs a debug message with structured fields
@@ -167,13 +140,26 @@ func (l *Logger) logWithFields(level Level, msg string, fields map[string]interf
 	}
 	fieldStr += " }"
 	
-	if l.colored {
-		fieldStr = color.New(color.Faint).Sprint(fieldStr)
-	}
-	
 	if level >= ERROR {
 		fmt.Fprintln(os.Stderr, baseMsg, fieldStr)
 	} else {
 		fmt.Println(baseMsg, fieldStr)
 	}
+}
+
+// formatMessage formats a log message with timestamp, level, and component
+func (l *Logger) formatMessage(level Level, msg string, args ...interface{}) string {
+	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
+	formattedMsg := fmt.Sprintf(msg, args...)
+	
+	baseMsg := fmt.Sprintf("[%s] [%s] [%s] %s",
+		timestamp,
+		levelNames[level],
+		l.component,
+		formattedMsg)
+	
+	if levelColors[level] != nil {
+		return levelColors[level].Sprint(baseMsg)
+	}
+	return baseMsg
 } 
