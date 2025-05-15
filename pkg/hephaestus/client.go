@@ -2,8 +2,11 @@ package hephaestus
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"time"
+
+	"github.com/yourusername/hephaestus/pkg/health"
 )
 
 // Client represents a Hephaestus client instance
@@ -30,6 +33,14 @@ type Client interface {
 	
 	// GetMetrics returns current metrics
 	GetMetrics() (*Metrics, error)
+
+	// Health check methods
+	
+	// Ping performs a quick connectivity check to all components
+	Ping(ctx context.Context) error
+	
+	// CheckHealth performs a comprehensive health check of all components
+	CheckHealth(ctx context.Context) (*health.SystemHealth, error)
 }
 
 // Error represents a detected error with its context and potential fix
@@ -69,17 +80,27 @@ func NewClient(config *Config) (Client, error) {
 	// Initialize client implementation
 	return &clientImpl{
 		config: config,
+		health: health.NewChecker(map[string]string{
+			"ai_endpoint":  config.AIConfig["endpoint"],
+			"metrics_port": config.MetricsEndpoint,
+			"kb_path":      config.KnowledgeBaseDir,
+		}),
 	}, nil
 }
 
 // clientImpl is the concrete implementation of the Client interface
 type clientImpl struct {
 	config *Config
-	// Add internal fields here
+	health *health.Checker
 }
 
 // Implement all interface methods for clientImpl
 func (c *clientImpl) Start(ctx context.Context) error {
+	// First check connectivity
+	if err := c.Ping(ctx); err != nil {
+		return fmt.Errorf("connectivity check failed: %v", err)
+	}
+	
 	// Implementation
 	return nil
 }
@@ -112,4 +133,12 @@ func (c *clientImpl) RemoveErrorPattern(pattern string) error {
 func (c *clientImpl) GetMetrics() (*Metrics, error) {
 	// Implementation
 	return nil, nil
+}
+
+func (c *clientImpl) Ping(ctx context.Context) error {
+	return c.health.PingComponents(ctx)
+}
+
+func (c *clientImpl) CheckHealth(ctx context.Context) (*health.SystemHealth, error) {
+	return c.health.CheckHealth(ctx)
 } 
