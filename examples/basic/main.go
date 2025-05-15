@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
-	"github.com/yourusername/hephaestus/pkg/hephaestus"
-	"github.com/yourusername/hephaestus/pkg/logger"
+	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
+	"github.com/HoyeonS/hephaestus/pkg/logger"
 )
 
 func main() {

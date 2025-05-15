@@ -27,8 +27,10 @@ Hephaestus is an intelligent error detection and automated fix generation system
 
 ## Installation
 
+To install Hephaestus, run:
+
 ```bash
-go get github.com/yourusername/hephaestus
+go get github.com/HoyeonS/hephaestus
 ```
 
 ## Basic Usage
@@ -39,7 +41,7 @@ Here's a minimal example to get started:
 package main
 
 import (
-    "github.com/yourusername/hephaestus/pkg/hephaestus"
+    "github.com/HoyeonS/hephaestus/pkg/hephaestus"
 )
 
 func main() {

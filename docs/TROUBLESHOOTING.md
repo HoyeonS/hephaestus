@@ -164,7 +164,7 @@ client.Start(ctx) // Will test connection during initialization
 
 2. Update dependencies:
    ```bash
-   go get -u github.com/yourusername/hephaestus
+   go get -u github.com/HoyeonS/hephaestus
    go mod tidy
    ```
 
