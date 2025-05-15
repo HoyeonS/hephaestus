@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/yourusername/hephaestus/pkg/hephaestus"
+	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
 )
 
 func main() {

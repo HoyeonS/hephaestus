@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/yourusername/hephaestus/pkg/logger"
+	"github.com/HoyeonS/hephaestus/pkg/logger"
 )
 
 // ComponentStatus represents the health status of a component

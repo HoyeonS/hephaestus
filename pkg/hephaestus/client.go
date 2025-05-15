@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/yourusername/hephaestus/pkg/health"
+	"github.com/HoyeonS/hephaestus/pkg/health"
 )
 
 // Client represents a Hephaestus client instance
