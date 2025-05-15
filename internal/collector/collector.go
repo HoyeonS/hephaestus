@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/HoyeonS/hephaestus/internal/models"
-	"github.com/fsnotify/fsnotify"
 )
 
 // Config holds configuration for the collector service
@@ -23,7 +22,6 @@ type Config struct {
 // Service represents the log collector service
 type Service struct {
 	config     Config
-	watcher    *fsnotify.Watcher
 	errorChan  chan *models.Error
 	done       chan struct{}
 	files      map[string]*os.File
@@ -33,14 +31,8 @@ type Service struct {
 
 // New creates a new collector service
 func New(config Config) (*Service, error) {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create file watcher: %v", err)
-	}
-
 	return &Service{
 		config:    config,
-		watcher:   watcher,
 		errorChan: make(chan *models.Error, config.BufferSize),
 		done:      make(chan struct{}),
 		files:     make(map[string]*os.File),
@@ -50,16 +42,13 @@ func New(config Config) (*Service, error) {
 
 // Start starts the collector service
 func (s *Service) Start(ctx context.Context) error {
-	// Initialize file watchers
-	if err := s.initializeWatchers(); err != nil {
-		return fmt.Errorf("failed to initialize watchers: %v", err)
+	// Initialize file monitoring
+	if err := s.initializeFiles(); err != nil {
+		return fmt.Errorf("failed to initialize files: %v", err)
 	}
 
-	// Start watching for file changes
-	go s.watchFiles(ctx)
-
-	// Start polling for new files
-	go s.pollNewFiles(ctx)
+	// Start monitoring files
+	go s.monitorFiles(ctx)
 
 	return nil
 }
@@ -75,7 +64,7 @@ func (s *Service) Stop() error {
 	}
 	s.mu.Unlock()
 
-	return s.watcher.Close()
+	return nil
 }
 
 // GetErrorChannel returns the channel for detected errors
@@ -83,8 +72,8 @@ func (s *Service) GetErrorChannel() <-chan *models.Error {
 	return s.errorChan
 }
 
-// initializeWatchers sets up file watchers for all configured log paths
-func (s *Service) initializeWatchers() error {
+// initializeFiles sets up monitoring for all configured log paths
+func (s *Service) initializeFiles() error {
 	for _, pattern := range s.config.LogPaths {
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
@@ -101,25 +90,8 @@ func (s *Service) initializeWatchers() error {
 	return nil
 }
 
-// watchFiles monitors files for changes
-func (s *Service) watchFiles(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case event := <-s.watcher.Events:
-			if event.Op&fsnotify.Write == fsnotify.Write {
-				s.processFile(event.Name)
-			}
-		case err := <-s.watcher.Errors:
-			// Log watcher errors but continue watching
-			fmt.Printf("Error watching files: %v\n", err)
-		}
-	}
-}
-
-// pollNewFiles periodically checks for new log files
-func (s *Service) pollNewFiles(ctx context.Context) {
+// monitorFiles periodically checks files for changes
+func (s *Service) monitorFiles(ctx context.Context) {
 	ticker := time.NewTicker(s.config.PollingInterval)
 	defer ticker.Stop()
 
@@ -127,7 +99,10 @@ func (s *Service) pollNewFiles(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		case <-s.done:
+			return
 		case <-ticker.C:
+			// Check for new files
 			for _, pattern := range s.config.LogPaths {
 				matches, err := filepath.Glob(pattern)
 				if err != nil {
@@ -146,6 +121,18 @@ func (s *Service) pollNewFiles(ctx context.Context) {
 						}
 					}
 				}
+			}
+
+			// Check existing files for changes
+			s.mu.RLock()
+			paths := make([]string, 0, len(s.files))
+			for path := range s.files {
+				paths = append(paths, path)
+			}
+			s.mu.RUnlock()
+
+			for _, path := range paths {
+				s.processFile(path)
 			}
 		}
 	}
@@ -170,7 +157,7 @@ func (s *Service) addFile(path string) error {
 	s.positions[path] = pos
 	s.mu.Unlock()
 
-	return s.watcher.Add(path)
+	return nil
 }
 
 // processFile reads new content from a file and processes it
@@ -206,36 +193,35 @@ func (s *Service) processFile(path string) {
 		}
 	}
 
+	// Update position
 	s.mu.Lock()
 	s.positions[path] = pos
 	s.mu.Unlock()
 }
 
-// processContent analyzes log content for errors
+// processContent analyzes content for errors
 func (s *Service) processContent(source string, content []byte) {
-	// This is a simple implementation that looks for "ERROR" in logs
-	// In a real implementation, this would use more sophisticated error detection
-	
-	// Example error detection
-	if containsError(content) {
-		error := &models.Error{
-			Message:   string(content),
-			Source:    source,
-			Severity:  models.High,
-			Timestamp: time.Now(),
-		}
+	if !containsError(content) {
+		return
+	}
 
-		// Try to send error, don't block if channel is full
-		select {
-		case s.errorChan <- error:
-		default:
-			fmt.Printf("Error channel full, dropping error from %s\n", source)
-		}
+	// Create and send error event
+	errEvent := &models.Error{
+		Source:    source,
+		Content:   string(content),
+		Timestamp: time.Now(),
+	}
+
+	select {
+	case s.errorChan <- errEvent:
+	default:
+		// Channel is full, log overflow
+		fmt.Printf("Error channel overflow, dropping error from %s\n", source)
 	}
 }
 
-// containsError checks if content contains error indicators
+// containsError checks if content contains error patterns
 func containsError(content []byte) bool {
-	// Simple implementation - in reality, this would be more sophisticated
-	return true // Placeholder implementation
+	// Simple error detection - can be enhanced based on requirements
+	return true // For now, treat all content as potential errors
 }
