@@ -52,6 +52,8 @@ type CodeChange struct {
 	EndLine     int    `json:"end_line"`     // Ending line number
 	OldCode     string `json:"old_code"`     // Original code
 	NewCode     string `json:"new_code"`     // Modified code
+	Content     string `json:"content"`      // Full content of the change
+	Type        string `json:"type"`         // Type of the change
 	ChangeType  string `json:"change_type"`  // Type of change (add, modify, delete)
 	Description string `json:"description"`   // Description of the change
 }

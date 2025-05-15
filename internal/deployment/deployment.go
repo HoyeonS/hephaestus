@@ -310,9 +310,13 @@ func (s *Service) applyFixInSandbox(sandbox string, fix *models.Fix) error {
 	for _, change := range fix.CodeChanges {
 		dstPath := filepath.Join(sandbox, filepath.Base(change.FilePath))
 		if err := applyCodeChange(models.CodeChange{
-			FilePath: dstPath,
-			Content:  change.Content,
-			Type:     change.Type,
+			FilePath:    dstPath,
+			StartLine:   change.StartLine,
+			EndLine:     change.EndLine,
+			OldCode:     change.OldCode,
+			NewCode:     change.NewCode,
+			ChangeType:  change.ChangeType,
+			Description: change.Description,
 		}); err != nil {
 			return fmt.Errorf("failed to apply change in sandbox: %v", err)
 		}
