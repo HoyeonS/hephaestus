@@ -134,10 +134,6 @@ make test
 make lint
 ```
 
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
 ## Support
 
 - [Documentation](docs/README.md)
