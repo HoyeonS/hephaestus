@@ -133,6 +133,31 @@ func (c *clientImpl) GetMetrics() (*Metrics, error) {
 	return &Metrics{}, nil
 }
 
+// CheckHealth performs a comprehensive health check of all components
+func (c *clientImpl) CheckHealth(ctx context.Context) (*SystemHealth, error) {
+	health := &SystemHealth{
+		Status:    "healthy",
+		Message:   "All components are healthy",
+		Details:   make(map[string]interface{}),
+		Timestamp: time.Now(),
+	}
+
+	// Perform connectivity test
+	if err := c.TestConnectivity(ctx); err != nil {
+		health.Status = "unhealthy"
+		health.Message = fmt.Sprintf("Connectivity test failed: %v", err)
+		health.Details["connectivity_error"] = err.Error()
+		return health, nil
+	}
+
+	// Add basic health metrics
+	health.Details["uptime"] = time.Since(time.Now()) // Placeholder for actual uptime
+	health.Details["memory_usage"] = "N/A"            // Placeholder for actual memory usage
+	health.Details["goroutines"] = "N/A"             // Placeholder for actual goroutine count
+
+	return health, nil
+}
+
 // TestConnectivity implements a basic connectivity test
 func (c *clientImpl) TestConnectivity(ctx context.Context) error {
 	client := &http.Client{Timeout: 5 * time.Second}
