@@ -10,7 +10,7 @@ import (
 
 func main() {
 	// Create a minimal client without any configuration
-	client, err := hephaestus.NewClient(&hephaestus.Config{})
+	client, err := hephaestus.NewClient(hephaestus.DefaultConfig())
 	if err != nil {
 		fmt.Printf("Failed to create client: %v\n", err)
 		return
