@@ -208,7 +208,7 @@ graph TD
 ## Installation
 
 ```bash
-go get github.com/HoyeonS/hephaestus
+go get github.com/HoyeonS/hephaestus@v0.1.0
 ```
 
 ## Quick Start
