@@ -3,7 +3,9 @@ package hephaestus
 import (
 	"context"
 	"fmt"
+	"io"
 	"sync"
+	"time"
 
 	"github.com/HoyeonS/hephaestus/internal/analyzer"
 	"github.com/HoyeonS/hephaestus/internal/collector"
@@ -13,8 +15,8 @@ import (
 	"github.com/HoyeonS/hephaestus/internal/models"
 )
 
-// Client represents the Hephaestus client
-type Client struct {
+// HephaestusClient represents the Hephaestus client implementation
+type HephaestusClient struct {
 	collector  *collector.Service
 	analyzer   *analyzer.Service
 	generator  *generator.Service
@@ -26,16 +28,36 @@ type Client struct {
 	errorChan     chan error
 	
 	mu     sync.RWMutex
-	config *Config
+	config *HephaestusConfig
 }
 
 // Config represents the client configuration
-type Config struct {
-	CollectorConfig  collector.Config  `yaml:"collector"`
-	AnalyzerConfig   analyzer.Config   `yaml:"analyzer"`
-	GeneratorConfig  generator.Config  `yaml:"generator"`
-	DeploymentConfig deployment.Config `yaml:"deployment"`
-	KnowledgeConfig  knowledge.Config  `yaml:"knowledge"`
+type HephaestusConfig struct {
+	LogFormat          string        `yaml:"log_format"`          // "json", "text", or "structured"
+	TimeFormat         string        `yaml:"time_format"`         // time format string for parsing timestamps
+	ContextTimeWindow  time.Duration `yaml:"context_time_window"` // time window for collecting context around errors
+	ContextBufferSize  int          `yaml:"context_buffer_size"` // size of the circular buffer for context
+	
+	ErrorPatterns     map[string]string `yaml:"error_patterns"`      // map of error pattern name to regex pattern
+	ErrorSeverities   map[string]int    `yaml:"error_severities"`    // map of error pattern name to severity level
+	MinErrorSeverity  int              `yaml:"min_error_severity"`   // minimum severity level to trigger fix generation
+	
+	MaxFixAttempts    int              `yaml:"max_fix_attempts"`     // maximum number of fix attempts per error
+	FixTimeout        time.Duration    `yaml:"fix_timeout"`          // timeout for fix generation
+	AIProvider        string           `yaml:"ai_provider"`          // AI provider to use for fix generation
+	AIConfig         map[string]string `yaml:"ai_config"`           // AI provider specific configuration
+	
+	KnowledgeBaseDir  string           `yaml:"knowledge_base_dir"`   // directory to store knowledge base
+	EnableLearning    bool             `yaml:"enable_learning"`      // whether to enable learning from successful fixes
+	
+	LogLevel         string           `yaml:"log_level"`            // log level (debug, info, warn, error)
+	LogColorEnabled  bool             `yaml:"log_color_enabled"`    // enable colored log output
+	LogComponents    []string         `yaml:"log_components"`       // components to log (empty means all)
+	LogFile         string           `yaml:"log_file"`             // log file path (empty means stdout)
+	
+	EnableMetrics     bool             `yaml:"enable_metrics"`       // whether to collect metrics
+	MetricsEndpoint   string           `yaml:"metrics_endpoint"`     // endpoint for metrics export
+	MetricsInterval   time.Duration    `yaml:"metrics_interval"`     // interval for metrics collection
 }
 
 // FixSuggestion represents a suggested fix from Hephaestus
@@ -48,7 +70,7 @@ type FixSuggestion struct {
 }
 
 // New creates a new Hephaestus client
-func New(config *Config) (*Client, error) {
+func New(config *HephaestusConfig) (Client, error) {
 	collector, err := collector.New(config.CollectorConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create collector: %v", err)
@@ -74,7 +96,7 @@ func New(config *Config) (*Client, error) {
 		return nil, fmt.Errorf("failed to create knowledge base: %v", err)
 	}
 
-	return &Client{
+	return &HephaestusClient{
 		collector:      collector,
 		analyzer:       analyzer,
 		generator:      generator,
@@ -88,7 +110,7 @@ func New(config *Config) (*Client, error) {
 }
 
 // Start starts the Hephaestus client
-func (c *Client) Start(ctx context.Context) error {
+func (c *HephaestusClient) Start(ctx context.Context) error {
 	// Start all services
 	if err := c.collector.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start collector: %v", err)
@@ -117,7 +139,7 @@ func (c *Client) Start(ctx context.Context) error {
 }
 
 // Stop stops the Hephaestus client
-func (c *Client) Stop() error {
+func (c *HephaestusClient) Stop() error {
 	if err := c.collector.Stop(); err != nil {
 		return fmt.Errorf("failed to stop collector: %v", err)
 	}
@@ -142,22 +164,22 @@ func (c *Client) Stop() error {
 }
 
 // GetFixChannel returns the channel for receiving applied fixes
-func (c *Client) GetFixChannel() <-chan *models.Fix {
+func (c *HephaestusClient) GetFixChannel() <-chan *models.Fix {
 	return c.fixChannel
 }
 
 // GetSuggestionChannel returns the channel for receiving fix suggestions
-func (c *Client) GetSuggestionChannel() <-chan *FixSuggestion {
+func (c *HephaestusClient) GetSuggestionChannel() <-chan *FixSuggestion {
 	return c.suggestionChan
 }
 
 // GetErrorChannel returns the channel for receiving errors
-func (c *Client) GetErrorChannel() <-chan error {
+func (c *HephaestusClient) GetErrorChannel() <-chan error {
 	return c.errorChan
 }
 
 // processPipeline processes the error detection and fix pipeline
-func (c *Client) processPipeline(ctx context.Context) {
+func (c *HephaestusClient) processPipeline(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -219,4 +241,52 @@ func (c *Client) processPipeline(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// MonitorReader starts monitoring a reader for errors
+func (c *HephaestusClient) MonitorReader(ctx context.Context, reader io.Reader, source string) error {
+	// Implementation would monitor the reader for errors
+	return fmt.Errorf("monitor reader not implemented")
+}
+
+// MonitorCommand starts monitoring a command's output for errors
+func (c *HephaestusClient) MonitorCommand(ctx context.Context, name string, args ...string) (<-chan *Error, error) {
+	// Implementation would monitor command output for errors
+	return nil, fmt.Errorf("monitor command not implemented")
+}
+
+// AddErrorPattern adds a new error pattern to detect
+func (c *HephaestusClient) AddErrorPattern(pattern string, severity int) error {
+	// Implementation would add a new error pattern
+	return fmt.Errorf("add error pattern not implemented")
+}
+
+// RemoveErrorPattern removes an error pattern
+func (c *HephaestusClient) RemoveErrorPattern(pattern string) error {
+	// Implementation would remove an error pattern
+	return fmt.Errorf("remove error pattern not implemented")
+}
+
+// GetMetrics returns current metrics
+func (c *HephaestusClient) GetMetrics() (*Metrics, error) {
+	// Implementation would return current metrics
+	return nil, fmt.Errorf("get metrics not implemented")
+}
+
+// Ping performs a quick connectivity check to all components
+func (c *HephaestusClient) Ping(ctx context.Context) error {
+	// Implementation would check connectivity
+	return fmt.Errorf("ping not implemented")
+}
+
+// CheckHealth performs a comprehensive health check of all components
+func (c *HephaestusClient) CheckHealth(ctx context.Context) (*SystemHealth, error) {
+	// Implementation would perform health check
+	return nil, fmt.Errorf("health check not implemented")
+}
+
+// TestConnectivity performs a basic connectivity test
+func (c *HephaestusClient) TestConnectivity(ctx context.Context) error {
+	// Implementation would test connectivity
+	return fmt.Errorf("connectivity test not implemented")
 } 
