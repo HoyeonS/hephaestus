@@ -1,0 +1,55 @@
+linters:
+  enable:
+    - gofmt
+    - golint
+    - govet
+    - errcheck
+    - staticcheck
+    - gosimple
+    - ineffassign
+    - unconvert
+    - misspell
+    - gocyclo
+    - gosec
+    - prealloc
+    - nakedret
+    - exportloopref
+    - gocritic
+
+linters-settings:
+  gocyclo:
+    min-complexity: 15
+  golint:
+    min-confidence: 0.8
+  govet:
+    check-shadowing: true
+  gosec:
+    excludes:
+      - G104 # Audit errors not checked
+
+run:
+  deadline: 5m
+  tests: true
+  skip-dirs:
+    - vendor/
+    - third_party/
+  skip-files:
+    - ".*_test\\.go$"
+    - "\\.pb\\.go$"
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+
+  max-same-issues: 0
+  max-per-linter: 0
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true 
