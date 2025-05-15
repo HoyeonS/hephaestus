@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os"
 	"time"
-
-	"github.com/fatih/color"
 )
 
 // Level represents the logging level
@@ -19,14 +17,6 @@ const (
 	FATAL
 )
 
-var levelColors = map[Level]*color.Color{
-	DEBUG: color.New(color.FgCyan),
-	INFO:  color.New(color.FgGreen),
-	WARN:  color.New(color.FgYellow),
-	ERROR: color.New(color.FgRed),
-	FATAL: color.New(color.FgRed, color.Bold),
-}
-
 var levelNames = map[Level]string{
 	DEBUG: "DEBUG",
 	INFO:  "INFO ",
@@ -35,7 +25,7 @@ var levelNames = map[Level]string{
 	FATAL: "FATAL",
 }
 
-// Logger provides structured logging with colors
+// Logger provides structured logging
 type Logger struct {
 	component string
 	level     Level
@@ -49,7 +39,7 @@ func New(component string, level Level) *Logger {
 	}
 }
 
-// log prints a colored log message
+// log prints a log message
 func (l *Logger) log(level Level, format string, args ...interface{}) {
 	if level < l.level {
 		return
@@ -57,18 +47,12 @@ func (l *Logger) log(level Level, format string, args ...interface{}) {
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	message := fmt.Sprintf(format, args...)
+	logLine := fmt.Sprintf("[%s] [%s] [%s] %s\n", timestamp, levelNames[level], l.component, message)
 
-	switch level {
-	case DEBUG:
-		color.Cyan("[%s] [DEBUG] [%s] %s", timestamp, l.component, message)
-	case INFO:
-		color.Green("[%s] [INFO] [%s] %s", timestamp, l.component, message)
-	case WARN:
-		color.Yellow("[%s] [WARN] [%s] %s", timestamp, l.component, message)
-	case ERROR:
-		color.Red("[%s] [ERROR] [%s] %s", timestamp, l.component, message)
-	case FATAL:
-		color.HiRed("[%s] [FATAL] [%s] %s", timestamp, l.component, message)
+	if level >= ERROR {
+		fmt.Fprint(os.Stderr, logLine)
+	} else {
+		fmt.Print(logLine)
 	}
 }
 
@@ -131,35 +115,19 @@ func (l *Logger) ErrorWithFields(msg string, fields map[string]interface{}) {
 
 // logWithFields logs a message with structured fields
 func (l *Logger) logWithFields(level Level, msg string, fields map[string]interface{}) {
-	baseMsg := l.formatMessage(level, msg)
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	logLine := fmt.Sprintf("[%s] [%s] [%s] %s", timestamp, levelNames[level], l.component, msg)
 	
 	// Format fields
 	fieldStr := "{"
 	for k, v := range fields {
 		fieldStr += fmt.Sprintf(" %s=%v", k, v)
 	}
-	fieldStr += " }"
+	fieldStr += " }\n"
 	
 	if level >= ERROR {
-		fmt.Fprintln(os.Stderr, baseMsg, fieldStr)
+		fmt.Fprint(os.Stderr, logLine, fieldStr)
 	} else {
-		fmt.Println(baseMsg, fieldStr)
+		fmt.Print(logLine, fieldStr)
 	}
-}
-
-// formatMessage formats a log message with timestamp, level, and component
-func (l *Logger) formatMessage(level Level, msg string, args ...interface{}) string {
-	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
-	formattedMsg := fmt.Sprintf(msg, args...)
-	
-	baseMsg := fmt.Sprintf("[%s] [%s] [%s] %s",
-		timestamp,
-		levelNames[level],
-		l.component,
-		formattedMsg)
-	
-	if levelColors[level] != nil {
-		return levelColors[level].Sprint(baseMsg)
-	}
-	return baseMsg
 } 
