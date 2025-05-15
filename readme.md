@@ -2,7 +2,6 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/HoyeonS/hephaestus.svg)](https://pkg.go.dev/github.com/HoyeonS/hephaestus)
 [![Go Report Card](https://goreportcard.com/badge/github.com/HoyeonS/hephaestus)](https://goreportcard.com/report/github.com/HoyeonS/hephaestus)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Hephaestus is an intelligent error detection and automated fix generation system for Go applications. It monitors application logs in real-time, detects critical issues, and either suggests or automatically applies AI-generated fixes.
 
@@ -325,10 +324,6 @@ make test
 make test
 make lint
 ```
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
 
 ## Support
 
