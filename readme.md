@@ -264,7 +264,6 @@ knowledge:
   storage_path: "./data/knowledge"
   learning_enabled: true
 ```
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
