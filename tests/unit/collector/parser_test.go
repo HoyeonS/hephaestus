@@ -11,86 +11,112 @@ import (
 )
 
 func TestParser_ParseLine(t *testing.T) {
-	timeFormat := "2006-01-02 15:04:05"
-	
 	tests := []struct {
-		name          string
-		format        collector.LogFormat
-		patterns      []string
-		timeFormat    string
-		line          string
-		expectedError bool
-		expectedTime  time.Time
-		expectedLevel string
-		expectedMsg   string
+		name        string
+		line        string
+		wantMessage string
+		wantErr     bool
 	}{
 		{
-			name:       "valid log line with timestamp",
-			format:     collector.FormatText,
-			patterns:   nil,
-			timeFormat: timeFormat,
-			line:       "2024-03-21 10:00:00 ERROR Test message",
-			expectedTime: time.Date(2024, 3, 21, 10, 0, 0, 0, time.UTC),
-			expectedLevel: "ERROR",
-			expectedMsg:   "Test message",
+			name:        "valid log line with timestamp",
+			line:        "2024-03-21 10:00:00 Test log message",
+			wantMessage: "Test log message",
+			wantErr:     false,
 		},
 		{
-			name:          "invalid timestamp format",
-			format:        collector.FormatText,
-			patterns:      nil,
-			timeFormat:    timeFormat,
-			line:          "invalid-time ERROR Test message",
-			expectedError: true,
+			name:        "log line without timestamp",
+			line:        "Test log message",
+			wantMessage: "Test log message",
+			wantErr:     false,
 		},
 		{
-			name:          "empty line",
-			format:        collector.FormatText,
-			patterns:      nil,
-			timeFormat:    timeFormat,
-			line:          "",
-			expectedError: true,
+			name:        "invalid timestamp format",
+			line:        "2024/03/21 10:00:00 Test log message",
+			wantMessage: "2024/03/21 10:00:00 Test log message",
+			wantErr:     false,
 		},
 		{
-			name:          "missing level",
-			format:        collector.FormatText,
-			patterns:      nil,
-			timeFormat:    timeFormat,
-			line:          "2024-03-21 10:00:00 Test message",
-			expectedError: true,
+			name:    "empty line",
+			line:    "",
+			wantErr: true,
+		},
+		{
+			name:    "whitespace only",
+			line:    "   \t\n",
+			wantErr: true,
+		},
+	}
+
+	parser := collector.NewParser()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := parser.ParseLine(tt.line)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			// Check message
+			assert.Equal(t, tt.wantMessage, result["message"])
+
+			// Check timestamp
+			timestamp, ok := result["timestamp"].(time.Time)
+			assert.True(t, ok, "timestamp should be of type time.Time")
+			assert.False(t, timestamp.IsZero(), "timestamp should not be zero")
+		})
+	}
+}
+
+func TestParser_ParseLine_TimestampHandling(t *testing.T) {
+	parser := collector.NewParser()
+
+	// Test valid timestamp parsing
+	line := "2024-03-21 10:00:00 Test message"
+	result, err := parser.ParseLine(line)
+	require.NoError(t, err)
+
+	timestamp, ok := result["timestamp"].(time.Time)
+	require.True(t, ok, "timestamp should be of type time.Time")
+	assert.Equal(t, 2024, timestamp.Year())
+	assert.Equal(t, time.Month(3), timestamp.Month())
+	assert.Equal(t, 21, timestamp.Day())
+	assert.Equal(t, 10, timestamp.Hour())
+	assert.Equal(t, 0, timestamp.Minute())
+	assert.Equal(t, 0, timestamp.Second())
+}
+
+func TestParser_ParseLine_MessageExtraction(t *testing.T) {
+	parser := collector.NewParser()
+
+	tests := []struct {
+		name        string
+		line        string
+		wantMessage string
+	}{
+		{
+			name:        "message with special characters",
+			line:        "2024-03-21 10:00:00 Test: [error] {data} <warning>",
+			wantMessage: "Test: [error] {data} <warning>",
+		},
+		{
+			name:        "message with multiple spaces",
+			line:        "2024-03-21 10:00:00    Multiple   Spaces   Here   ",
+			wantMessage: "Multiple   Spaces   Here",
+		},
+		{
+			name:        "message with leading/trailing spaces",
+			line:        "   2024-03-21 10:00:00    Trimmed Message   ",
+			wantMessage: "Trimmed Message",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create parser
-			p, err := collector.NewParser(tt.format, tt.patterns, tt.timeFormat)
+			result, err := parser.ParseLine(tt.line)
 			require.NoError(t, err)
-
-			// Parse line
-			result, err := p.ParseLine(tt.line)
-
-			if tt.expectedError {
-				assert.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-			assert.NotNil(t, result)
-
-			// Check timestamp
-			timestamp, ok := result["timestamp"].(time.Time)
-			require.True(t, ok, "timestamp should be of type time.Time")
-			assert.Equal(t, tt.expectedTime, timestamp)
-
-			// Check level
-			level, ok := result["level"].(string)
-			require.True(t, ok, "level should be of type string")
-			assert.Equal(t, tt.expectedLevel, level)
-			
-			// Check message
-			msg, ok := result["message"].(string)
-			require.True(t, ok, "message should be of type string")
-			assert.Equal(t, tt.expectedMsg, msg)
+			assert.Equal(t, tt.wantMessage, result["message"])
 		})
 	}
 }

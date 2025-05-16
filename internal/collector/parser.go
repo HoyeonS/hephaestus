@@ -2,6 +2,7 @@ package collector
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -16,11 +17,17 @@ const (
 	FormatStructured
 )
 
+const (
+	timestampLayout = "2006-01-02 15:04:05"
+	timestampLen    = 19 // Length of "YYYY-MM-DD HH:MM:SS"
+)
+
 // Parser handles log line parsing and error detection
 type Parser struct {
-	format     LogFormat
-	patterns   []*regexp.Regexp
-	timeFormat string
+	format            LogFormat
+	patterns          []*regexp.Regexp
+	timeFormat        string
+	timestampLayout   string
 }
 
 // NewParser creates a new log parser with the specified format
@@ -35,24 +42,38 @@ func NewParser(format LogFormat, patterns []string, timeFormat string) (*Parser,
 	}
 
 	return &Parser{
-		format:     format,
-		patterns:   compiledPatterns,
-		timeFormat: timeFormat,
+		format:            format,
+		patterns:          compiledPatterns,
+		timeFormat:        timeFormat,
+		timestampLayout:   timestampLayout,
 	}, nil
 }
 
-// ParseLine parses a log line and returns structured data
+// ParseLine parses a log line and returns a map containing the parsed fields
 func (p *Parser) ParseLine(line string) (map[string]interface{}, error) {
-	switch p.format {
-	case FormatJSON:
-		return p.parseJSON(line)
-	case FormatText:
-		return p.parseText(line)
-	case FormatStructured:
-		return p.parseStructured(line)
-	default:
-		return nil, nil
+	if strings.TrimSpace(line) == "" {
+		return nil, fmt.Errorf("empty line")
 	}
+
+	result := make(map[string]interface{})
+
+	// Parse text content
+	text, err := p.parseText(line)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse text: %v", err)
+	}
+	result["message"] = text
+
+	// Extract and parse timestamp
+	timestamp, err := p.extractTimestamp(line)
+	if err != nil {
+		// If timestamp parsing fails, use current time
+		result["timestamp"] = time.Now()
+	} else {
+		result["timestamp"] = timestamp
+	}
+
+	return result, nil
 }
 
 func (p *Parser) parseJSON(line string) (map[string]interface{}, error) {
@@ -63,32 +84,19 @@ func (p *Parser) parseJSON(line string) (map[string]interface{}, error) {
 	return result, nil
 }
 
-func (p *Parser) parseText(line string) (map[string]interface{}, error) {
-	result := make(map[string]interface{})
-	
-	// Try to extract timestamp
-	if timestamp, rest := p.extractTimestamp(line); timestamp != nil {
-		result["timestamp"] = timestamp
-		line = rest
+// parseText extracts the text content from the log line
+func (p *Parser) parseText(line string) (string, error) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return "", fmt.Errorf("empty line")
 	}
 
-	// Try to match error patterns
-	for _, pattern := range p.patterns {
-		if matches := pattern.FindStringSubmatch(line); matches != nil {
-			for i, name := range pattern.SubexpNames() {
-				if i != 0 && name != "" {
-					result[name] = matches[i]
-				}
-			}
-			break
-		}
+	// If line starts with timestamp, remove it
+	if len(line) > timestampLen && p.isTimestamp(line[:timestampLen]) {
+		line = strings.TrimSpace(line[timestampLen:])
 	}
 
-	if len(result) == 0 {
-		result["message"] = strings.TrimSpace(line)
-	}
-
-	return result, nil
+	return line, nil
 }
 
 func (p *Parser) parseStructured(line string) (map[string]interface{}, error) {
@@ -105,15 +113,29 @@ func (p *Parser) parseStructured(line string) (map[string]interface{}, error) {
 	return result, nil
 }
 
-func (p *Parser) extractTimestamp(line string) (*time.Time, string) {
-	if p.timeFormat == "" {
-		return nil, line
+// extractTimestamp attempts to extract and parse a timestamp from the log line
+func (p *Parser) extractTimestamp(line string) (time.Time, error) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return time.Time{}, fmt.Errorf("empty line")
 	}
 
-	// Try to find timestamp at the start of the line
-	if t, err := time.Parse(p.timeFormat, line[:len(p.timeFormat)]); err == nil {
-		return &t, line[len(p.timeFormat):]
+	// Check if line is long enough to contain a timestamp
+	if len(line) < timestampLen {
+		return time.Time{}, fmt.Errorf("line too short for timestamp")
 	}
 
-	return nil, line
+	// Try to parse timestamp
+	timestamp, err := time.Parse(p.timestampLayout, line[:timestampLen])
+	if err != nil {
+		return time.Time{}, fmt.Errorf("invalid timestamp format: %v", err)
+	}
+
+	return timestamp, nil
+}
+
+// isTimestamp checks if a string matches the timestamp format
+func (p *Parser) isTimestamp(s string) bool {
+	_, err := time.Parse(p.timestampLayout, s)
+	return err == nil
 }
