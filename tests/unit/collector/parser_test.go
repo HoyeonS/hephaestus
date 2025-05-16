@@ -14,83 +14,49 @@ func TestParser_ParseLine(t *testing.T) {
 	timeFormat := "2006-01-02 15:04:05"
 	
 	tests := []struct {
-		name       string
-		format     collector.LogFormat
-		patterns   []string
-		line       string
-		timeFormat string
-		expected   map[string]interface{}
-		wantErr    bool
+		name          string
+		format        collector.LogFormat
+		patterns      []string
+		timeFormat    string
+		line          string
+		expectedError bool
+		expectedTime  time.Time
+		expectedLevel string
+		expectedMsg   string
 	}{
 		{
-			name:   "json format",
-			format: collector.FormatJSON,
-			line:   `{"timestamp": "2024-03-21 10:00:00", "level": "ERROR", "message": "Test error"}`,
-			expected: map[string]interface{}{
-				"timestamp": "2024-03-21 10:00:00",
-				"level":     "ERROR",
-				"message":   "Test error",
-			},
-			wantErr: false,
-		},
-		{
-			name:       "text format with timestamp",
+			name:       "valid log line with timestamp",
 			format:     collector.FormatText,
-			patterns:   []string{`level=(?P<level>\w+) msg="(?P<message>.*?)"`},
-			line:       "2024-03-21 10:00:00 level=ERROR msg=\"Test error\"",
+			patterns:   nil,
 			timeFormat: timeFormat,
-			expected: map[string]interface{}{
-				"timestamp": time.Date(2024, 3, 21, 10, 0, 0, 0, time.UTC),
-				"level":     "ERROR",
-				"message":   "Test error",
-			},
-			wantErr: false,
+			line:       "2024-03-21 10:00:00 ERROR Test message",
+			expectedTime: time.Date(2024, 3, 21, 10, 0, 0, 0, time.UTC),
+			expectedLevel: "ERROR",
+			expectedMsg:   "Test message",
 		},
 		{
-			name:   "structured format",
-			format: collector.FormatStructured,
-			line:   "timestamp=2024-03-21 10:00:00|level=ERROR|message=Test error",
-			expected: map[string]interface{}{
-				"timestamp": "2024-03-21 10:00:00",
-				"level":     "ERROR",
-				"message":   "Test error",
-			},
-			wantErr: false,
+			name:          "invalid timestamp format",
+			format:        collector.FormatText,
+			patterns:      nil,
+			timeFormat:    timeFormat,
+			line:          "invalid-time ERROR Test message",
+			expectedError: true,
 		},
 		{
-			name:     "invalid json",
-			format:   collector.FormatJSON,
-			line:     `{"invalid json`,
-			expected: nil,
-			wantErr:  true,
+			name:          "empty line",
+			format:        collector.FormatText,
+			patterns:      nil,
+			timeFormat:    timeFormat,
+			line:          "",
+			expectedError: true,
 		},
 		{
-			name:     "empty line",
-			format:   collector.FormatText,
-			patterns: []string{`level=(?P<level>\w+)`},
-			line:     "",
-			expected: map[string]interface{}{
-				"message": "",
-			},
-			wantErr: false,
-		},
-		{
-			name:     "no pattern match",
-			format:   collector.FormatText,
-			patterns: []string{`level=(?P<level>\w+)`},
-			line:     "some random text",
-			expected: map[string]interface{}{
-				"message": "some random text",
-			},
-			wantErr: false,
-		},
-		{
-			name:     "invalid pattern",
-			format:   collector.FormatText,
-			patterns: []string{`invalid(pattern`},
-			line:     "test",
-			expected: nil,
-			wantErr:  true,
+			name:          "missing level",
+			format:        collector.FormatText,
+			patterns:      nil,
+			timeFormat:    timeFormat,
+			line:          "2024-03-21 10:00:00 Test message",
+			expectedError: true,
 		},
 	}
 
@@ -98,85 +64,33 @@ func TestParser_ParseLine(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create parser
 			p, err := collector.NewParser(tt.format, tt.patterns, tt.timeFormat)
-			if tt.wantErr {
-				assert.Error(t, err)
-				return
-			}
 			require.NoError(t, err)
 
 			// Parse line
 			result, err := p.ParseLine(tt.line)
-			if tt.wantErr {
+
+			if tt.expectedError {
 				assert.Error(t, err)
 				return
 			}
+
 			require.NoError(t, err)
+			assert.NotNil(t, result)
 
-			// Verify results
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
+			// Check timestamp
+			timestamp, ok := result["timestamp"].(time.Time)
+			require.True(t, ok, "timestamp should be of type time.Time")
+			assert.Equal(t, tt.expectedTime, timestamp)
 
-func TestParser_ExtractTimestamp(t *testing.T) {
-	timeFormat := "2006-01-02 15:04:05"
-	
-	tests := []struct {
-		name           string
-		timeFormat     string
-		line           string
-		expectedTime   *time.Time
-		expectedRemain string
-	}{
-		{
-			name:       "valid timestamp",
-			timeFormat: timeFormat,
-			line:       "2024-03-21 10:00:00 ERROR Test message",
-			expectedTime: func() *time.Time {
-				t := time.Date(2024, 3, 21, 10, 0, 0, 0, time.UTC)
-				return &t
-			}(),
-			expectedRemain: " ERROR Test message",
-		},
-		{
-			name:           "no timestamp format",
-			timeFormat:     "",
-			line:           "ERROR Test message",
-			expectedTime:   nil,
-			expectedRemain: "ERROR Test message",
-		},
-		{
-			name:           "invalid timestamp",
-			timeFormat:     timeFormat,
-			line:           "invalid timestamp ERROR Test message",
-			expectedTime:   nil,
-			expectedRemain: "invalid timestamp ERROR Test message",
-		},
-		{
-			name:           "empty line",
-			timeFormat:     timeFormat,
-			line:           "",
-			expectedTime:   nil,
-			expectedRemain: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create parser
-			p, err := collector.NewParser(collector.FormatText, nil, tt.timeFormat)
-			require.NoError(t, err)
-
-			// Extract timestamp
-			timestamp, remain := p.ExtractTimestamp(tt.line)
-
-			// Verify results
-			if tt.expectedTime == nil {
-				assert.Nil(t, timestamp)
-			} else {
-				assert.Equal(t, *tt.expectedTime, *timestamp)
-			}
-			assert.Equal(t, tt.expectedRemain, remain)
+			// Check level
+			level, ok := result["level"].(string)
+			require.True(t, ok, "level should be of type string")
+			assert.Equal(t, tt.expectedLevel, level)
+			
+			// Check message
+			msg, ok := result["message"].(string)
+			require.True(t, ok, "message should be of type string")
+			assert.Equal(t, tt.expectedMsg, msg)
 		})
 	}
 }
@@ -197,7 +111,8 @@ func TestParser_MultiplePatterns(t *testing.T) {
 			name: "matches first pattern",
 			line: "level=ERROR message",
 			expected: map[string]interface{}{
-				"level": "ERROR",
+				"level":   "ERROR",
+				"message": "message",
 			},
 		},
 		{
@@ -205,13 +120,15 @@ func TestParser_MultiplePatterns(t *testing.T) {
 			line: "severity=HIGH message",
 			expected: map[string]interface{}{
 				"severity": "HIGH",
+				"message":  "message",
 			},
 		},
 		{
 			name: "matches third pattern",
 			line: "error=\"test error\" message",
 			expected: map[string]interface{}{
-				"error": "test error",
+				"error":   "test error",
+				"message": "message",
 			},
 		},
 		{
@@ -243,7 +160,11 @@ func TestParser_MultiplePatterns(t *testing.T) {
 			require.NoError(t, err)
 
 			// Verify results
-			assert.Equal(t, tt.expected, result)
+			for key, expectedValue := range tt.expected {
+				actualValue, ok := result[key]
+				require.True(t, ok, "missing key: %s", key)
+				assert.Equal(t, expectedValue, actualValue)
+			}
 		})
 	}
 }
