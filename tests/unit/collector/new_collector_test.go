@@ -91,8 +91,7 @@ func TestNew(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c, err := collector.New(tt.config)
 			if tt.wantErr {
-				assert.Error(t, err)
-				if tt.errContains != "" {
+				if assert.Error(t, err) && tt.errContains != "" {
 					assert.Contains(t, err.Error(), tt.errContains)
 				}
 				assert.Nil(t, c)
