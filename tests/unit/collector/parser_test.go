@@ -47,7 +47,8 @@ func TestParser_ParseLine(t *testing.T) {
 		},
 	}
 
-	parser := collector.NewParser()
+	parser, err := collector.NewParser(collector.FormatText, nil, "")
+	require.NoError(t, err)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -70,7 +71,8 @@ func TestParser_ParseLine(t *testing.T) {
 }
 
 func TestParser_ParseLine_TimestampHandling(t *testing.T) {
-	parser := collector.NewParser()
+	parser, err := collector.NewParser(collector.FormatText, nil, "")
+	require.NoError(t, err)
 
 	// Test valid timestamp parsing
 	line := "2024-03-21 10:00:00 Test message"
@@ -88,7 +90,8 @@ func TestParser_ParseLine_TimestampHandling(t *testing.T) {
 }
 
 func TestParser_ParseLine_MessageExtraction(t *testing.T) {
-	parser := collector.NewParser()
+	parser, err := collector.NewParser(collector.FormatText, nil, "")
+	require.NoError(t, err)
 
 	tests := []struct {
 		name        string
@@ -117,6 +120,52 @@ func TestParser_ParseLine_MessageExtraction(t *testing.T) {
 			result, err := parser.ParseLine(tt.line)
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantMessage, result["message"])
+		})
+	}
+}
+
+func TestParser_ParseLine_PatternMatching(t *testing.T) {
+	patterns := []string{
+		`(?P<level>ERROR|WARN|INFO)\s+(?P<message>.*)`,
+		`\[(?P<component>\w+)\]\s+(?P<message>.*)`,
+	}
+
+	parser, err := collector.NewParser(collector.FormatText, patterns, "")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name           string
+		line           string
+		wantLevel     string
+		wantComponent string
+		wantMessage   string
+	}{
+		{
+			name:       "error message",
+			line:       "2024-03-21 10:00:00 ERROR Database connection failed",
+			wantLevel: "ERROR",
+			wantMessage: "Database connection failed",
+		},
+		{
+			name:         "component message",
+			line:         "2024-03-21 10:00:00 [API] Request timeout",
+			wantComponent: "API",
+			wantMessage:   "Request timeout",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := parser.ParseLine(tt.line)
+			require.NoError(t, err)
+
+			if tt.wantLevel != "" {
+				assert.Equal(t, tt.wantLevel, result["level"])
+			}
+			if tt.wantComponent != "" {
+				assert.Equal(t, tt.wantComponent, result["component"])
+			}
+			assert.Contains(t, result["message"], tt.wantMessage)
 		})
 	}
 }

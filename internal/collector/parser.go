@@ -32,20 +32,29 @@ type Parser struct {
 
 // NewParser creates a new log parser with the specified format
 func NewParser(format LogFormat, patterns []string, timeFormat string) (*Parser, error) {
-	compiledPatterns := make([]*regexp.Regexp, 0, len(patterns))
-	for _, p := range patterns {
-		re, err := regexp.Compile(p)
-		if err != nil {
-			return nil, err
+	// Compile patterns
+	var compiledPatterns []*regexp.Regexp
+	if patterns != nil {
+		compiledPatterns = make([]*regexp.Regexp, len(patterns))
+		for i, pattern := range patterns {
+			re, err := regexp.Compile(pattern)
+			if err != nil {
+				return nil, fmt.Errorf("invalid pattern %q: %v", pattern, err)
+			}
+			compiledPatterns[i] = re
 		}
-		compiledPatterns = append(compiledPatterns, re)
+	}
+
+	// Use default timestamp layout if not provided
+	if timeFormat == "" {
+		timeFormat = timestampLayout
 	}
 
 	return &Parser{
-		format:            format,
-		patterns:          compiledPatterns,
-		timeFormat:        timeFormat,
-		timestampLayout:   timestampLayout,
+		format:          format,
+		patterns:        compiledPatterns,
+		timeFormat:      timeFormat,
+		timestampLayout: timestampLayout,
 	}, nil
 }
 
@@ -71,6 +80,20 @@ func (p *Parser) ParseLine(line string) (map[string]interface{}, error) {
 		result["timestamp"] = time.Now()
 	} else {
 		result["timestamp"] = timestamp
+	}
+
+	// Try to match error patterns
+	if len(p.patterns) > 0 {
+		for _, pattern := range p.patterns {
+			if matches := pattern.FindStringSubmatch(line); matches != nil {
+				for i, name := range pattern.SubexpNames() {
+					if i != 0 && name != "" {
+						result[name] = matches[i]
+					}
+				}
+				break
+			}
+		}
 	}
 
 	return result, nil
