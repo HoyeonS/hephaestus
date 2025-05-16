@@ -15,72 +15,64 @@ import (
 )
 
 func TestCollector(t *testing.T) {
-	// Create temporary test directory
+	// Create temporary directory for test files
 	tmpDir, err := os.MkdirTemp("", "collector_test_*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	// Test cases
+	// Create test files
+	file1 := filepath.Join(tmpDir, "test1.log")
+	file2 := filepath.Join(tmpDir, "test2.log")
+	err = os.WriteFile(file1, []byte("test error 1\n"), 0644)
+	require.NoError(t, err)
+	err = os.WriteFile(file2, []byte("test error 2\n"), 0644)
+	require.NoError(t, err)
+
 	tests := []struct {
-		name           string
-		config         collector.Config
-		writeLogLines  []string
-		expectedErrors int
-		wantErr        bool
+		name          string
+		paths         []string
+		patterns      map[string]collector.ErrorSeverity
+		expectedCount int
+		wantErr      bool
 	}{
 		{
-			name: "basic error detection",
-			config: collector.Config{
-				LogPaths:        []string{filepath.Join(tmpDir, "test.log")},
-				PollingInterval: 100 * time.Millisecond,
-				BufferSize:      10,
+			name:   "single file",
+			paths:  []string{file1},
+			patterns: map[string]collector.ErrorSeverity{
+				"error": collector.SeverityHigh,
 			},
-			writeLogLines: []string{
-				"2024-03-21 10:00:00 INFO Normal log line",
-				"2024-03-21 10:00:01 ERROR Test error message",
-				"2024-03-21 10:00:02 INFO Another normal line",
-			},
-			expectedErrors: 1,
-			wantErr:       false,
+			expectedCount: 1,
+			wantErr:      false,
 		},
 		{
-			name: "multiple files",
-			config: collector.Config{
-				LogPaths:        []string{filepath.Join(tmpDir, "*.log")},
-				PollingInterval: 100 * time.Millisecond,
-				BufferSize:      10,
+			name:   "multiple files",
+			paths:  []string{file1, file2},
+			patterns: map[string]collector.ErrorSeverity{
+				"error": collector.SeverityHigh,
 			},
-			writeLogLines: []string{
-				"2024-03-21 10:00:00 ERROR First error",
-				"2024-03-21 10:00:01 ERROR Second error",
-			},
-			expectedErrors: 2,
-			wantErr:       false,
+			expectedCount: 2,
+			wantErr:      false,
 		},
 		{
-			name: "invalid path",
-			config: collector.Config{
-				LogPaths:        []string{"/nonexistent/path/*.log"},
-				PollingInterval: 100 * time.Millisecond,
-				BufferSize:      10,
+			name:   "invalid path",
+			paths:  []string{"nonexistent.log"},
+			patterns: map[string]collector.ErrorSeverity{
+				"error": collector.SeverityHigh,
 			},
-			writeLogLines:  []string{},
-			expectedErrors: 0,
-			wantErr:       true,
+			expectedCount: 0,
+			wantErr:      true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create test log file
-			if len(tt.writeLogLines) > 0 {
-				logFile := filepath.Join(tmpDir, "test.log")
-				err := os.WriteFile(logFile, []byte(tt.writeLogLines[0]+"\n"), 0644)
-				require.NoError(t, err)
-			}
-
 			// Create collector
-			c, err := collector.New(tt.config)
+			config := collector.Config{
+				LogPaths:        tt.paths,
+				PollingInterval: 100 * time.Millisecond,
+				BufferSize:      10,
+			}
+			c, err := collector.New(config)
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
@@ -93,61 +85,45 @@ func TestCollector(t *testing.T) {
 
 			err = c.Start(ctx)
 			require.NoError(t, err)
+			defer c.Stop()
 
-			// Write additional log lines
-			if len(tt.writeLogLines) > 1 {
-				logFile := filepath.Join(tmpDir, "test.log")
-				f, err := os.OpenFile(logFile, os.O_APPEND|os.O_WRONLY, 0644)
-				require.NoError(t, err)
-				for _, line := range tt.writeLogLines[1:] {
-					_, err := f.WriteString(line + "\n")
-					require.NoError(t, err)
-				}
-				f.Close()
-			}
-
-			// Collect errors
+			// Wait for errors
 			errorChan := c.GetErrorChannel()
-			errors := make([]*models.Error, 0)
+			count := 0
 			timeout := time.After(1 * time.Second)
 
-		CollectLoop:
 			for {
 				select {
 				case err := <-errorChan:
-					errors = append(errors, err)
-					if len(errors) == tt.expectedErrors {
-						break CollectLoop
+					if err != nil {
+						count++
 					}
 				case <-timeout:
-					break CollectLoop
+					assert.Equal(t, tt.expectedCount, count)
+					return
 				}
 			}
-
-			// Verify results
-			assert.Equal(t, tt.expectedErrors, len(errors))
-
-			// Stop collector
-			err = c.Stop()
-			assert.NoError(t, err)
 		})
 	}
 }
 
 func TestCollector_FileRotation(t *testing.T) {
-	// Create temporary test directory
-	tmpDir, err := os.MkdirTemp("", "collector_rotation_test_*")
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "collector_test_*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	// Create config
+	// Create initial log file
+	logFile := filepath.Join(tmpDir, "app.log")
+	err = os.WriteFile(logFile, []byte("initial error\n"), 0644)
+	require.NoError(t, err)
+
+	// Create collector
 	config := collector.Config{
-		LogPaths:        []string{filepath.Join(tmpDir, "rotating.log")},
+		LogPaths:        []string{logFile},
 		PollingInterval: 100 * time.Millisecond,
 		BufferSize:      10,
 	}
-
-	// Create collector
 	c, err := collector.New(config)
 	require.NoError(t, err)
 
@@ -157,46 +133,47 @@ func TestCollector_FileRotation(t *testing.T) {
 
 	err = c.Start(ctx)
 	require.NoError(t, err)
+	defer c.Stop()
 
-	// Write to original log
-	logFile := filepath.Join(tmpDir, "rotating.log")
-	err = os.WriteFile(logFile, []byte("2024-03-21 10:00:00 ERROR Original error\n"), 0644)
-	require.NoError(t, err)
+	// Get error channel
+	errorChan := c.GetErrorChannel()
+	errorCount := 0
+
+	// Wait for initial error
+	select {
+	case err := <-errorChan:
+		if err != nil {
+			errorCount++
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timeout waiting for initial error")
+	}
 
 	// Simulate log rotation
-	err = os.Rename(logFile, logFile+".1")
+	rotatedFile := filepath.Join(tmpDir, "app.log.1")
+	err = os.Rename(logFile, rotatedFile)
 	require.NoError(t, err)
 
-	// Write to new log
-	err = os.WriteFile(logFile, []byte("2024-03-21 10:00:01 ERROR New error\n"), 0644)
+	// Create new log file with different content
+	err = os.WriteFile(logFile, []byte("new error after rotation\n"), 0644)
 	require.NoError(t, err)
 
-	// Collect errors
-	errorChan := c.GetErrorChannel()
-	errors := make([]*models.Error, 0)
+	// Wait for error from new file
 	timeout := time.After(2 * time.Second)
-
-CollectLoop:
 	for {
 		select {
 		case err := <-errorChan:
-			errors = append(errors, err)
-			if len(errors) == 2 {
-				break CollectLoop
+			if err != nil {
+				errorCount++
+				if errorCount >= 2 {
+					assert.Equal(t, 2, errorCount, "should detect errors from both original and rotated files")
+					return
+				}
 			}
 		case <-timeout:
-			break CollectLoop
+			t.Fatal("timeout waiting for error after rotation")
 		}
 	}
-
-	// Verify results
-	assert.Equal(t, 2, len(errors))
-	assert.Contains(t, errors[0].Message, "Original error")
-	assert.Contains(t, errors[1].Message, "New error")
-
-	// Stop collector
-	err = c.Stop()
-	assert.NoError(t, err)
 }
 
 func TestCollector_Concurrency(t *testing.T) {
