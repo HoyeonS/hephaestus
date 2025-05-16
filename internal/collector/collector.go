@@ -2,14 +2,28 @@ package collector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"time"
 
 	"github.com/HoyeonS/hephaestus/internal/models"
+)
+
+const (
+	maxPatternLength = 500
+)
+
+var (
+	ErrEmptyPattern     = errors.New("pattern cannot be empty")
+	ErrDuplicatePattern = errors.New("pattern already exists")
+	ErrInvalidSeverity  = errors.New("invalid severity level")
+	ErrInvalidPattern   = errors.New("invalid regex pattern")
+	ErrPatternTooLong   = errors.New("pattern is too long")
 )
 
 // Config holds configuration for the collector service
@@ -26,18 +40,38 @@ type Service struct {
 	done       chan struct{}
 	files      map[string]*os.File
 	positions  map[string]int64
+	patterns   map[string]ErrorSeverity
 	mu         sync.RWMutex
 }
 
 // New creates a new collector service
 func New(config Config) (*Service, error) {
+	if err := validateConfig(config); err != nil {
+		return nil, err
+	}
+
 	return &Service{
 		config:    config,
 		errorChan: make(chan *models.Error, config.BufferSize),
 		done:      make(chan struct{}),
 		files:     make(map[string]*os.File),
 		positions: make(map[string]int64),
+		patterns:  make(map[string]ErrorSeverity),
+		mu:        sync.RWMutex{},
 	}, nil
+}
+
+func validateConfig(config Config) error {
+	if len(config.LogPaths) == 0 {
+		return errors.New("log paths cannot be empty")
+	}
+	if config.PollingInterval <= 0 {
+		return errors.New("polling interval must be greater than zero")
+	}
+	if config.BufferSize <= 0 {
+		return errors.New("buffer size must be greater than zero")
+	}
+	return nil
 }
 
 // Start starts the collector service
@@ -224,4 +258,39 @@ func (s *Service) processContent(source string, content []byte) {
 func containsError(content []byte) bool {
 	// Simple error detection - can be enhanced based on requirements
 	return true // For now, treat all content as potential errors
+}
+
+func (s *Service) AddPattern(pattern string, severity ErrorSeverity) error {
+	if pattern == "" {
+		return ErrEmptyPattern
+	}
+
+	if len(pattern) > maxPatternLength {
+		return ErrPatternTooLong
+	}
+
+	if !isValidSeverity(severity) {
+		return ErrInvalidSeverity
+	}
+
+	// Validate regex pattern
+	_, err := regexp.Compile(pattern)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidPattern, err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Check for duplicate pattern
+	if _, exists := s.patterns[pattern]; exists {
+		return ErrDuplicatePattern
+	}
+
+	s.patterns[pattern] = severity
+	return nil
+}
+
+func isValidSeverity(severity ErrorSeverity) bool {
+	return severity >= SeverityLow && severity <= SeverityHigh
 }

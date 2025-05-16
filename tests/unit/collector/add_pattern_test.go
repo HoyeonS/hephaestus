@@ -15,7 +15,7 @@ func TestAddPattern(t *testing.T) {
 		pattern     string
 		severity    collector.ErrorSeverity
 		testMessage string
-		wantErr     bool
+		wantErr     error
 		shouldMatch bool
 	}{
 		{
@@ -23,7 +23,7 @@ func TestAddPattern(t *testing.T) {
 			pattern:     "new_error",
 			severity:    collector.SeverityHigh,
 			testMessage: "new_error occurred",
-			wantErr:     false,
+			wantErr:     nil,
 			shouldMatch: true,
 		},
 		{
@@ -31,7 +31,7 @@ func TestAddPattern(t *testing.T) {
 			pattern:     "",
 			severity:    collector.SeverityHigh,
 			testMessage: "test message",
-			wantErr:     true,
+			wantErr:     collector.ErrEmptyPattern,
 			shouldMatch: false,
 		},
 		{
@@ -39,7 +39,7 @@ func TestAddPattern(t *testing.T) {
 			pattern:     "duplicate",
 			severity:    collector.SeverityHigh,
 			testMessage: "duplicate error",
-			wantErr:     true,
+			wantErr:     collector.ErrDuplicatePattern,
 			shouldMatch: false,
 		},
 		{
@@ -47,7 +47,7 @@ func TestAddPattern(t *testing.T) {
 			pattern:     "invalid_severity",
 			severity:    collector.ErrorSeverity(999),
 			testMessage: "test error",
-			wantErr:     true,
+			wantErr:     collector.ErrInvalidSeverity,
 			shouldMatch: false,
 		},
 		{
@@ -55,8 +55,16 @@ func TestAddPattern(t *testing.T) {
 			pattern:     `error\s+\d+`,
 			severity:    collector.SeverityMedium,
 			testMessage: "error 123 occurred",
-			wantErr:     false,
+			wantErr:     nil,
 			shouldMatch: true,
+		},
+		{
+			name:        "add invalid regex pattern",
+			pattern:     "[invalid",
+			severity:    collector.SeverityHigh,
+			testMessage: "test error",
+			wantErr:     collector.ErrInvalidPattern,
+			shouldMatch: false,
 		},
 	}
 
@@ -71,8 +79,8 @@ func TestAddPattern(t *testing.T) {
 
 			// Add new pattern
 			err = d.AddPattern(tt.pattern, tt.severity)
-			if tt.wantErr {
-				assert.Error(t, err, "expected error for invalid pattern")
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
 				return
 			}
 			require.NoError(t, err)
@@ -137,37 +145,37 @@ func TestAddPattern_Validation(t *testing.T) {
 		name     string
 		pattern  string
 		severity collector.ErrorSeverity
-		wantErr  bool
+		wantErr  error
 	}{
 		{
 			name:     "valid pattern and severity",
 			pattern:  "error",
 			severity: collector.SeverityHigh,
-			wantErr:  false,
+			wantErr:  nil,
 		},
 		{
 			name:     "pattern with special characters",
 			pattern:  "error.*\\d+",
 			severity: collector.SeverityMedium,
-			wantErr:  false,
+			wantErr:  nil,
 		},
 		{
 			name:     "invalid regex pattern",
 			pattern:  "[invalid",
 			severity: collector.SeverityHigh,
-			wantErr:  true,
+			wantErr:  collector.ErrInvalidPattern,
 		},
 		{
 			name:     "pattern too long",
 			pattern:  string(make([]byte, 1000)),
 			severity: collector.SeverityHigh,
-			wantErr:  true,
+			wantErr:  collector.ErrPatternTooLong,
 		},
 		{
 			name:     "invalid severity value",
 			pattern:  "error",
 			severity: collector.ErrorSeverity(-1),
-			wantErr:  true,
+			wantErr:  collector.ErrInvalidSeverity,
 		},
 	}
 
@@ -179,8 +187,8 @@ func TestAddPattern_Validation(t *testing.T) {
 
 			// Add pattern
 			err = d.AddPattern(tt.pattern, tt.severity)
-			if tt.wantErr {
-				assert.Error(t, err, "expected error for invalid pattern")
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
 				return
 			}
 			require.NoError(t, err)
