@@ -33,7 +33,7 @@ func main() {
 	if err = client.Start(ctx); err != nil {
 		log.Error("Error occurred: %v", err)
 	} else {
-		log.Info("Hephaestus Initiated")
+		log.Info("Hephaestus Initiated...")
 	}
 
 	// Block main thread
