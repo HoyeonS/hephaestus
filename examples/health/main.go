@@ -15,14 +15,14 @@ func main() {
 		LogColorEnabled: true,
 		LogComponents:   []string{"health", "client"},
 		AIConfig: map[string]string{
-			"provider":    "openai",
-			"model":      "gpt-4",
-			"endpoint":   "https://api.openai.com/v1",
-			"api_key":    "your-api-key",
+			"provider": "openai",
+			"model":    "gpt-4",
+			"endpoint": "https://api.openai.com/v1",
+			"api_key":  "your-api-key",
 		},
-		MetricsEndpoint:   "localhost:9090",
-		KnowledgeBaseDir:  "./data/kb",
-		MetricsInterval:   time.Second * 30,
+		MetricsEndpoint:  "localhost:9090",
+		KnowledgeBaseDir: "./data/kb",
+		MetricsInterval:  time.Second * 30,
 	}
 
 	// Create a new client
@@ -52,11 +52,11 @@ func main() {
 	// Print health check results
 	log.Printf("System Status: %s", health.Status)
 	log.Printf("Checked at: %s", health.Timestamp.Format(time.RFC3339))
-	
+
 	for _, component := range health.Components {
-		log.Printf("Component %s: Status=%s, Message=%s", 
-			component.Name, 
-			component.Status, 
+		log.Printf("Component %s: Status=%s, Message=%s",
+			component.Name,
+			component.Status,
 			component.Message)
 	}
 
@@ -73,4 +73,4 @@ func main() {
 
 	// Keep the example running for a while
 	time.Sleep(time.Minute)
-} 
+}
