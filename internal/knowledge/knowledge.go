@@ -8,6 +8,7 @@ import (
 
 	"github.com/HoyeonS/hephaestus/internal/models"
 	"github.com/HoyeonS/hephaestus/pkg/filestore"
+	"github.com/HoyeonS/hephaestus/internal/logger"
 )
 
 // ErrorFixPattern represents a learned pattern of errors and their fixes
@@ -247,6 +248,8 @@ func (s *Service) prunePatterns() {
 // Helper functions
 
 func (s *Service) loadPatterns() error {
+	log := logger.GetGlobalLogger()
+	
 	files, err := s.store.List("patterns")
 	if err != nil {
 		return err
@@ -255,7 +258,7 @@ func (s *Service) loadPatterns() error {
 	for _, id := range files {
 		var pattern ErrorFixPattern
 		if err := s.store.Load("patterns", id, &pattern); err != nil {
-			fmt.Printf("Failed to load pattern %s: %v\n", id, err)
+			log.Error("Failed to load pattern %s: %v", id, err)
 			continue
 		}
 		s.patterns[id] = &pattern
@@ -274,7 +277,13 @@ func (s *Service) savePatterns() error {
 }
 
 func (s *Service) savePattern(pattern *ErrorFixPattern) error {
-	return s.store.Save("patterns", pattern.ID, pattern)
+	log := logger.GetGlobalLogger()
+
+	if err := s.store.Save("patterns", pattern.ID, pattern); err != nil {
+		log.Error("Failed to save pattern: %v", err)
+		return err
+	}
+	return nil
 }
 
 func (s *Service) deletePattern(id string) error {

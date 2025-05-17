@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"regexp"
 	"sync"
+	"os"
+	"bufio"
 
 	"github.com/HoyeonS/hephaestus/internal/models"
+	"github.com/HoyeonS/hephaestus/internal/logger"
 )
 
 // ErrorPattern represents a pattern to match errors
@@ -97,7 +100,8 @@ func (s *Service) analyzeErrors(ctx context.Context) {
 			select {
 			case s.outputChan <- analyzed:
 			default:
-				fmt.Printf("Output channel full, dropping analyzed error: %s\n", analyzed.ID)
+				log := logger.GetGlobalLogger()
+				log.Error("Output channel full, dropping analyzed error: %s", analyzed.ID)
 			}
 		}
 	}
@@ -105,21 +109,37 @@ func (s *Service) analyzeErrors(ctx context.Context) {
 
 // analyzeError performs detailed analysis of an error
 func (s *Service) analyzeError(err *models.Error) *models.Error {
+	log := logger.GetGlobalLogger()
+
+	analyzed := &models.Error{
+		ID:      err.ID,
+		Source:  err.Source,
+		Message: err.Message,
+	}
+
 	// Classify error severity based on patterns
-	s.classifyError(err)
+	s.classifyError(analyzed)
 
 	// Extract and analyze stack trace
 	if err.StackTrace != "" {
-		s.analyzeStackTrace(err)
+		s.analyzeStackTrace(analyzed)
 	}
 
 	// Analyze code context
-	s.analyzeCodeContext(err)
+	s.analyzeCodeContext(analyzed)
 
 	// Generate error hash for grouping similar errors
-	err.Hash = s.generateErrorHash(err)
+	analyzed.Hash = s.generateErrorHash(analyzed)
 
-	return err
+	// Get code context
+	context, getContextErr := s.getCodeContext(err)
+	if getContextErr != nil {
+		log.Error("Failed to get code context: %v", getContextErr)
+	} else {
+		analyzed.CodeSnippet = context
+	}
+
+	return analyzed
 }
 
 // classifyError determines the severity and type of an error
@@ -165,13 +185,65 @@ func (s *Service) analyzeCodeContext(err *models.Error) {
 	}
 
 	// Get code context around the error line
-	context, getContextErr := getCodeContext(err.FileName, err.LineNumber, s.config.ContextLines)
+	context, getContextErr := s.getCodeContext(err)
 	if getContextErr != nil {
-		fmt.Printf("Failed to get code context: %v\n", getContextErr)
-		return
+		log := logger.GetGlobalLogger()
+		log.Error("Failed to get code context: %v", getContextErr)
+	} else {
+		err.CodeSnippet = context
+	}
+}
+
+// getCodeContext gets the code context around a specific line
+func (s *Service) getCodeContext(err *models.Error) (string, error) {
+	if err.FileName == "" || err.LineNumber == 0 {
+		return "", fmt.Errorf("file name or line number not provided")
 	}
 
-	err.CodeSnippet = context
+	file, openErr := os.Open(err.FileName)
+	if openErr != nil {
+		return "", fmt.Errorf("failed to open file: %v", openErr)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	var lines []string
+	lineNum := 0
+	contextLines := s.config.ContextLines
+
+	// Read lines into buffer
+	for scanner.Scan() {
+		lineNum++
+		lines = append(lines, scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("error reading file: %v", err)
+	}
+
+	// Calculate context range
+	start := err.LineNumber - contextLines
+	if start < 0 {
+		start = 0
+	}
+	end := err.LineNumber + contextLines
+	if end > len(lines) {
+		end = len(lines)
+	}
+
+	// Build context string
+	var context string
+	for i := start; i < end; i++ {
+		linePrefix := fmt.Sprintf("%d: ", i+1)
+		if i+1 == err.LineNumber {
+			linePrefix = ">" + linePrefix
+		} else {
+			linePrefix = " " + linePrefix
+		}
+		context += linePrefix + lines[i] + "\n"
+	}
+
+	return context, nil
 }
 
 // generateErrorHash generates a unique hash for the error
@@ -193,11 +265,4 @@ func parseStackTrace(trace string) []StackFrame {
 	// Implementation would parse stack trace format
 	// This is a placeholder that returns an empty slice
 	return []StackFrame{}
-}
-
-// getCodeContext gets the code context around a specific line
-func getCodeContext(filename string, line, context int) (string, error) {
-	// Implementation would read the file and extract context lines
-	// This is a placeholder that returns an empty string
-	return "", nil
 } 

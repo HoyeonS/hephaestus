@@ -2,11 +2,11 @@ package generator
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/HoyeonS/hephaestus/internal/models"
+	"github.com/HoyeonS/hephaestus/internal/logger"
 )
 
 // FixStrategy represents a strategy for generating fixes
@@ -87,11 +87,7 @@ func (s *Service) generateFixes(ctx context.Context) {
 
 			if fix != nil {
 				// Try to send fix, don't block if channel is full
-				select {
-				case s.outputChan <- fix:
-				default:
-					fmt.Printf("Output channel full, dropping generated fix: %s\n", fix.ID)
-				}
+				s.sendFix(fix)
 			}
 		}
 	}
@@ -217,4 +213,15 @@ func (s *Service) generateResourceCleanupFix(err *models.Error, fix *models.Fix)
 	fix.Description = "Added resource cleanup"
 
 	return true
+}
+
+func (s *Service) sendFix(fix *models.Fix) {
+	log := logger.GetGlobalLogger()
+
+	select {
+	case s.outputChan <- fix:
+		// Successfully sent
+	default:
+		log.Error("Output channel full, dropping generated fix: %s", fix.ID)
+	}
 } 

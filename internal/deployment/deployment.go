@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/HoyeonS/hephaestus/internal/models"
+	"github.com/HoyeonS/hephaestus/internal/logger"
 )
 
 // Config holds configuration for the deployment service
@@ -70,6 +71,8 @@ func (s *Service) GetOutputChannel() <-chan *models.Fix {
 
 // processDeployments handles the deployment workflow
 func (s *Service) processDeployments(ctx context.Context) {
+	log := logger.GetGlobalLogger()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -95,7 +98,7 @@ func (s *Service) processDeployments(ctx context.Context) {
 				select {
 				case s.outputChan <- result:
 				default:
-					fmt.Printf("Output channel full, dropping deployed fix: %s\n", result.ID)
+					log.Error("Output channel full, dropping deployed fix: %s", result.ID)
 				}
 			}
 		}
@@ -104,10 +107,12 @@ func (s *Service) processDeployments(ctx context.Context) {
 
 // deployFix handles the deployment of a fix
 func (s *Service) deployFix(ctx context.Context, fix *models.Fix) *models.Fix {
+	log := logger.GetGlobalLogger()
+
 	// Create sandbox environment
 	sandbox, err := s.createSandbox(fix)
 	if err != nil {
-		fmt.Printf("Failed to create sandbox: %v\n", err)
+		log.Error("Failed to create sandbox: %v", err)
 		fix.UpdateStatus(models.FixFailed)
 		return fix
 	}
@@ -115,7 +120,7 @@ func (s *Service) deployFix(ctx context.Context, fix *models.Fix) *models.Fix {
 
 	// Test fix in sandbox
 	if err := s.testInSandbox(ctx, sandbox, fix); err != nil {
-		fmt.Printf("Sandbox testing failed: %v\n", err)
+		log.Error("Sandbox testing failed: %v", err)
 		fix.UpdateStatus(models.FixFailed)
 		return fix
 	}
@@ -132,7 +137,7 @@ func (s *Service) deployFix(ctx context.Context, fix *models.Fix) *models.Fix {
 	// Create backup for rollback
 	if s.config.RollbackEnabled {
 		if err := s.createBackup(fix); err != nil {
-			fmt.Printf("Failed to create backup: %v\n", err)
+			log.Error("Failed to create backup: %v", err)
 			fix.UpdateStatus(models.FixFailed)
 			return fix
 		}
@@ -140,7 +145,7 @@ func (s *Service) deployFix(ctx context.Context, fix *models.Fix) *models.Fix {
 
 	// Apply the fix
 	if err := s.applyFix(fix); err != nil {
-		fmt.Printf("Failed to apply fix: %v\n", err)
+		log.Error("Failed to apply fix: %v", err)
 		if s.config.RollbackEnabled {
 			s.rollback(fix)
 		}
@@ -150,7 +155,7 @@ func (s *Service) deployFix(ctx context.Context, fix *models.Fix) *models.Fix {
 
 	// Verify the fix
 	if err := s.verifyFix(fix); err != nil {
-		fmt.Printf("Fix verification failed: %v\n", err)
+		log.Error("Fix verification failed: %v", err)
 		if s.config.RollbackEnabled {
 			s.rollback(fix)
 		}
@@ -322,4 +327,15 @@ func (s *Service) applyFixInSandbox(sandbox string, fix *models.Fix) error {
 		}
 	}
 	return nil
+}
+
+func (s *Service) sendResult(result *models.Fix) {
+	log := logger.GetGlobalLogger()
+
+	select {
+	case s.outputChan <- result:
+		// Successfully sent
+	default:
+		log.Error("Output channel full, dropping deployed fix: %s", result.ID)
+	}
 } 

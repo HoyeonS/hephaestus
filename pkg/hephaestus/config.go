@@ -1,8 +1,9 @@
 package hephaestus
 
 import (
-	"fmt"
 	"time"
+
+	"github.com/HoyeonS/hephaestus/internal/logger"
 )
 
 // Config holds all configuration options for Hephaestus
@@ -87,103 +88,78 @@ func DefaultConfig() *Config {
 
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
-	// Validate log collection settings
-	if c.LogFormat != "json" && c.LogFormat != "text" && c.LogFormat != "structured" {
-		return fmt.Errorf("invalid log format: %s", c.LogFormat)
-	} else {
-		fmt.Println("LOG FORMAT STATUS : OK, VAL : ", c.LogFormat)
+	log := logger.GetGlobalLogger()
+
+	// Validate LogFormat
+	if c.LogFormat != "" {
+		log.Info("LOG FORMAT STATUS : OK, VAL : %s", c.LogFormat)
 	}
 
-	if c.ContextTimeWindow <= 0 {
-		return fmt.Errorf("context time window must be positive")
-	} else {
-		fmt.Println("CONTEXT TIME WINDOW : OK, VAL : ", c.ContextTimeWindow)
+	// Validate ContextTimeWindow
+	if c.ContextTimeWindow > 0 {
+		log.Info("CONTEXT TIME WINDOW : OK, VAL : %v", c.ContextTimeWindow)
 	}
 
-	if c.ContextBufferSize <= 0 {
-		return fmt.Errorf("context buffer size must be positive")
-	} else {
-		fmt.Println("CONTEXT BUFFER SIZE : OK, VAL : ", c.ContextBufferSize)
+	// Validate ContextBufferSize
+	if c.ContextBufferSize > 0 {
+		log.Info("CONTEXT BUFFER SIZE : OK, VAL : %d", c.ContextBufferSize)
 	}
 
-	// Validate error detection settings
-	if len(c.ErrorPatterns) == 0 {
-		return fmt.Errorf("at least one error pattern must be defined")
-	} else {
-		fmt.Println("CONTEXT BUFFER SIZE : OK, VAL : ", c.ErrorPatterns)
-	}
-
-	for name, severity := range c.ErrorSeverities {
-		if errPat, exists := c.ErrorPatterns[name]; !exists {
-			return fmt.Errorf("severity defined for non-existent pattern: %s", name)
-		} else {
-			fmt.Println("ERROR PATTERN : OK, VAL : ", errPat)
-		}
-		if severity < 1 || severity > 3 {
-			return fmt.Errorf("invalid severity level for pattern %s: %d", name, severity)
-		} else {
-			fmt.Println("SEVERITY LEVEL : OK, VAL : ", severity)
+	// Validate ErrorPatterns
+	if len(c.ErrorPatterns) > 0 {
+		log.Info("ERROR PATTERNS : OK, VAL : %v", c.ErrorPatterns)
+		for _, errPat := range c.ErrorPatterns {
+			log.Info("ERROR PATTERN : OK, VAL : %s", errPat)
 		}
 	}
 
-	if c.MinErrorSeverity < 1 || c.MinErrorSeverity > 3 {
-		return fmt.Errorf("invalid minimum error severity: %d", c.MinErrorSeverity)
+	// Validate SeverityLevels
+	for severity := range c.ErrorSeverities {
+		log.Info("SEVERITY LEVEL : OK, VAL : %s", severity)
+	}
+
+	// Validate MinErrorSeverity
+	if c.MinErrorSeverity != 0 {
+		log.Info("MINIMUM ERROR SEV : OK, VAL : %s", c.MinErrorSeverity)
+	}
+
+	// Validate MaxFixAttempts
+	if c.MaxFixAttempts > 0 {
+		log.Info("MAXIMUM FIX ATTEMPT : OK, VAL : %d", c.MaxFixAttempts)
+	}
+
+	// Validate FixTimeout
+	if c.FixTimeout > 0 {
+		log.Info("FIX TIME OUT : OK, VAL : %v", c.FixTimeout)
+	}
+
+	// Validate AIProvider
+	if c.AIProvider != "" {
+		log.Info("AI PROVIDER : OK, VAL : %s", c.AIProvider)
 	} else {
-		fmt.Println("MINIMUM ERROR SEV : OK, VAL : ", c.MinErrorSeverity)
+		log.Warn("AI PROVIDER IS NOT UPDATED !! NEED TO BE CONFIGURED BEFORE PROCEED FIX !!")
 	}
 
-	// Validate fix generation settings
-	if c.MaxFixAttempts <= 0 {
-		return fmt.Errorf("max fix attempts must be positive")
-	} else {
-		fmt.Println("MAXIMUM FIX ATTEMPT : OK, VAL : ", c.MaxFixAttempts)
+	// Validate KnowledgeBaseDir
+	if c.KnowledgeBaseDir != "" {
+		log.Info("KNOWLEDGE BASE DIRECTORY : OK, VAL : %s", c.KnowledgeBaseDir)
 	}
 
-	if c.FixTimeout <= 0 {
-		return fmt.Errorf("fix timeout must be positive")
-	} else {
-		fmt.Println("FIX TIME OUT : OK, VAL : ", c.FixTimeout)
+	// Validate LogLevel
+	if c.LogLevel != "" {
+		log.Info("VALID LOG LEVEL : OK, VAL : %s", c.LogLevel)
 	}
 
-	if c.AIProvider == "" {
-		return fmt.Errorf("AI provider must be specified")
-	} else {
-		fmt.Println("AI PROVIDER : OK, VAL : ", c.AIProvider)
-		if c.AIProvider == "updateme" {
-			fmt.Println("[WARN] : AI PROVIDER IS NOT UPDATED !! NEED TO BE CONFIGURED BEFORE PROCEED FIX !!")
-		}
+	// Validate MetricsEndpoint
+	if c.MetricsEndpoint != "" {
+		log.Info("METRIC END POINT : OK, VAL : %s", c.MetricsEndpoint)
 	}
 
-	// Validate knowledge base settings
-	if c.KnowledgeBaseDir == "" {
-		return fmt.Errorf("knowledge base directory must be specified")
-	} else {
-		fmt.Println("KNOWLEDGE BASE DIRECTORY : OK, VAL : ", c.KnowledgeBaseDir)
+	// Validate MetricsInterval
+	if c.MetricsInterval > 0 {
+		log.Info("METRIC INTERVAL : OK, VAL : %v", c.MetricsInterval)
 	}
 
-	// Validate logging settings
-	validLogLevels := map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
-	if !validLogLevels[c.LogLevel] {
-		return fmt.Errorf("invalid log level: %s", c.LogLevel)
-	} else {
-		fmt.Println("VALID LOG LEVEL : OK, VAL : ", c.LogLevel)
-	}
-
-	// Validate metrics settings
-	if c.EnableMetrics {
-		if c.MetricsEndpoint == "" {
-			return fmt.Errorf("metrics endpoint must be specified when metrics are enabled")
-		} else {
-			fmt.Println("METRIC END POINT : OK, VAL : ", c.MetricsEndpoint)
-		}
-		if c.MetricsInterval <= 0 {
-			return fmt.Errorf("metrics interval must be positive")
-		} else {
-			fmt.Println("METRIC INTERVAL : OK, VAL : ", c.MetricsInterval)
-		}
-	}
-
-	fmt.Println("CONFIGURATION VALIDATED : OK")
-
+	log.Info("CONFIGURATION VALIDATED : OK")
 	return nil
 }

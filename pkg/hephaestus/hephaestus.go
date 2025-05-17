@@ -22,11 +22,11 @@ type HephaestusClient struct {
 	generator  *generator.Service
 	deployment *deployment.Service
 	knowledge  *knowledge.Service
-	
+
 	fixChannel     chan *models.Fix
 	suggestionChan chan *FixSuggestion
-	errorChan     chan error
-	
+	errorChan      chan error
+
 	mu     sync.RWMutex
 	config *HephaestusConfig
 }
@@ -34,38 +34,38 @@ type HephaestusClient struct {
 // HephaestusConfig represents the client configuration
 type HephaestusConfig struct {
 	// Service-specific configurations
-	CollectorConfig  collector.Config  `yaml:"collector"`   // Configuration for the collector service
-	AnalyzerConfig   analyzer.Config   `yaml:"analyzer"`    // Configuration for the analyzer service
-	GeneratorConfig  generator.Config  `yaml:"generator"`   // Configuration for the generator service
-	DeploymentConfig deployment.Config `yaml:"deployment"`  // Configuration for the deployment service
-	KnowledgeConfig  knowledge.Config  `yaml:"knowledge"`   // Configuration for the knowledge base service
+	CollectorConfig  collector.Config  `yaml:"collector"`  // Configuration for the collector service
+	AnalyzerConfig   analyzer.Config   `yaml:"analyzer"`   // Configuration for the analyzer service
+	GeneratorConfig  generator.Config  `yaml:"generator"`  // Configuration for the generator service
+	DeploymentConfig deployment.Config `yaml:"deployment"` // Configuration for the deployment service
+	KnowledgeConfig  knowledge.Config  `yaml:"knowledge"`  // Configuration for the knowledge base service
 
 	// General settings
-	LogFormat          string        `yaml:"log_format"`          // "json", "text", or "structured"
-	TimeFormat         string        `yaml:"time_format"`         // time format string for parsing timestamps
-	ContextTimeWindow  time.Duration `yaml:"context_time_window"` // time window for collecting context around errors
-	ContextBufferSize  int          `yaml:"context_buffer_size"` // size of the circular buffer for context
-	
-	ErrorPatterns     map[string]string `yaml:"error_patterns"`      // map of error pattern name to regex pattern
-	ErrorSeverities   map[string]int    `yaml:"error_severities"`    // map of error pattern name to severity level
-	MinErrorSeverity  int              `yaml:"min_error_severity"`   // minimum severity level to trigger fix generation
-	
-	MaxFixAttempts    int              `yaml:"max_fix_attempts"`     // maximum number of fix attempts per error
-	FixTimeout        time.Duration    `yaml:"fix_timeout"`          // timeout for fix generation
-	AIProvider        string           `yaml:"ai_provider"`          // AI provider to use for fix generation
-	AIConfig         map[string]string `yaml:"ai_config"`           // AI provider specific configuration
-	
-	KnowledgeBaseDir  string           `yaml:"knowledge_base_dir"`   // directory to store knowledge base
-	EnableLearning    bool             `yaml:"enable_learning"`      // whether to enable learning from successful fixes
-	
-	LogLevel         string           `yaml:"log_level"`            // log level (debug, info, warn, error)
-	LogColorEnabled  bool             `yaml:"log_color_enabled"`    // enable colored log output
-	LogComponents    []string         `yaml:"log_components"`       // components to log (empty means all)
-	LogFile         string           `yaml:"log_file"`             // log file path (empty means stdout)
-	
-	EnableMetrics     bool             `yaml:"enable_metrics"`       // whether to collect metrics
-	MetricsEndpoint   string           `yaml:"metrics_endpoint"`     // endpoint for metrics export
-	MetricsInterval   time.Duration    `yaml:"metrics_interval"`     // interval for metrics collection
+	LogFormat         string        `yaml:"log_format"`          // "json", "text", or "structured"
+	TimeFormat        string        `yaml:"time_format"`         // time format string for parsing timestamps
+	ContextTimeWindow time.Duration `yaml:"context_time_window"` // time window for collecting context around errors
+	ContextBufferSize int           `yaml:"context_buffer_size"` // size of the circular buffer for context
+
+	ErrorPatterns    map[string]string `yaml:"error_patterns"`     // map of error pattern name to regex pattern
+	ErrorSeverities  map[string]int    `yaml:"error_severities"`   // map of error pattern name to severity level
+	MinErrorSeverity int               `yaml:"min_error_severity"` // minimum severity level to trigger fix generation
+
+	MaxFixAttempts int               `yaml:"max_fix_attempts"` // maximum number of fix attempts per error
+	FixTimeout     time.Duration     `yaml:"fix_timeout"`      // timeout for fix generation
+	AIProvider     string            `yaml:"ai_provider"`      // AI provider to use for fix generation
+	AIConfig       map[string]string `yaml:"ai_config"`        // AI provider specific configuration
+
+	KnowledgeBaseDir string `yaml:"knowledge_base_dir"` // directory to store knowledge base
+	EnableLearning   bool   `yaml:"enable_learning"`    // whether to enable learning from successful fixes
+
+	LogLevel        string   `yaml:"log_level"`         // log level (debug, info, warn, error)
+	LogColorEnabled bool     `yaml:"log_color_enabled"` // enable colored log output
+	LogComponents   []string `yaml:"log_components"`    // components to log (empty means all)
+	LogFile         string   `yaml:"log_file"`          // log file path (empty means stdout)
+
+	EnableMetrics   bool          `yaml:"enable_metrics"`   // whether to collect metrics
+	MetricsEndpoint string        `yaml:"metrics_endpoint"` // endpoint for metrics export
+	MetricsInterval time.Duration `yaml:"metrics_interval"` // interval for metrics collection
 }
 
 // FixSuggestion represents a suggested fix from Hephaestus
@@ -112,8 +112,8 @@ func New(config *HephaestusConfig) (Client, error) {
 		knowledge:      knowledge,
 		fixChannel:     make(chan *models.Fix, 100),
 		suggestionChan: make(chan *FixSuggestion, 100),
-		errorChan:     make(chan error, 100),
-		config:        config,
+		errorChan:      make(chan error, 100),
+		config:         config,
 	}, nil
 }
 
@@ -225,7 +225,7 @@ func (c *HephaestusClient) processPipeline(ctx context.Context) {
 					Confidence:  fix.Confidence,
 					Metadata:    fix.Metadata,
 				}
-				
+
 				select {
 				case c.suggestionChan <- suggestion:
 				default:
@@ -297,4 +297,4 @@ func (c *HephaestusClient) CheckHealth(ctx context.Context) (*SystemHealth, erro
 func (c *HephaestusClient) TestConnectivity(ctx context.Context) error {
 	// Implementation would test connectivity
 	return fmt.Errorf("connectivity test not implemented")
-} 
+}

@@ -2,29 +2,30 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"time"
+	"os"
 
+	"github.com/HoyeonS/hephaestus/internal/logger"
 	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
 )
 
 func main() {
-	// Create a minimal client without any configuration
-	client, err := hephaestus.NewClient(hephaestus.DefaultConfig())
+	log := logger.GetGlobalLogger()
+
+	// Create client
+	client, err := hephaestus.NewClient(nil)
 	if err != nil {
-		fmt.Printf("Failed to create client: %v\n", err)
-		return
+		log.Error("Failed to create client: %v", err)
+		os.Exit(1)
 	}
 
-	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	// Test connectivity
+	ctx := context.Background()
+	err = client.TestConnectivity(ctx)
 
-	// Test basic connectivity
-	fmt.Println("Testing connectivity to Hephaestus...")
-	if err := client.TestConnectivity(ctx); err != nil {
-		fmt.Printf("❌ Connectivity test failed: %v\n", err)
-		return
+	log.Info("Testing connectivity to Hephaestus...")
+	if err != nil {
+		log.Error("❌ Connectivity test failed: %v", err)
+		os.Exit(1)
 	}
-	fmt.Println("✅ Successfully connected to Hephaestus!")
+	log.Info("✅ Successfully connected to Hephaestus!")
 } 

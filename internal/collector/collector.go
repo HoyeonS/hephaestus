@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/HoyeonS/hephaestus/internal/models"
+	"github.com/HoyeonS/hephaestus/internal/logger"
 )
 
 const (
@@ -108,15 +109,18 @@ func (s *Service) GetErrorChannel() <-chan *models.Error {
 
 // initializeFiles sets up monitoring for all configured log paths
 func (s *Service) initializeFiles() error {
+	log := logger.GetGlobalLogger()
+
 	for _, pattern := range s.config.LogPaths {
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
-			return fmt.Errorf("invalid glob pattern %s: %v", pattern, err)
+			log.Error("Error matching glob pattern %s: %v", pattern, err)
+			continue
 		}
 
 		for _, path := range matches {
 			if err := s.addFile(path); err != nil {
-				return err
+				log.Error("Error adding new file %s: %v", path, err)
 			}
 		}
 	}
@@ -140,7 +144,8 @@ func (s *Service) monitorFiles(ctx context.Context) {
 			for _, pattern := range s.config.LogPaths {
 				matches, err := filepath.Glob(pattern)
 				if err != nil {
-					fmt.Printf("Error matching glob pattern %s: %v\n", pattern, err)
+					log := logger.GetGlobalLogger()
+					log.Error("Error matching glob pattern %s: %v", pattern, err)
 					continue
 				}
 
@@ -151,7 +156,8 @@ func (s *Service) monitorFiles(ctx context.Context) {
 
 					if !exists {
 						if err := s.addFile(path); err != nil {
-							fmt.Printf("Error adding new file %s: %v\n", path, err)
+							log := logger.GetGlobalLogger()
+							log.Error("Error adding new file %s: %v", path, err)
 						}
 					}
 				}
@@ -174,16 +180,20 @@ func (s *Service) monitorFiles(ctx context.Context) {
 
 // addFile adds a new file to be monitored
 func (s *Service) addFile(path string) error {
+	log := logger.GetGlobalLogger()
+
 	file, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("failed to open file %s: %v", path, err)
+		log.Error("Error opening file %s: %v", path, err)
+		return err
 	}
 
 	// Seek to end of file for new files
 	pos, err := file.Seek(0, io.SeekEnd)
 	if err != nil {
 		file.Close()
-		return fmt.Errorf("failed to seek file %s: %v", path, err)
+		log.Error("Error seeking file %s: %v", path, err)
+		return err
 	}
 
 	s.mu.Lock()
@@ -210,7 +220,8 @@ func (s *Service) processFile(path string) {
 	for {
 		n, err := file.ReadAt(buffer, pos)
 		if err != nil && err != io.EOF {
-			fmt.Printf("Error reading file %s: %v\n", path, err)
+			log := logger.GetGlobalLogger()
+			log.Error("Error reading file %s: %v", path, err)
 			return
 		}
 
@@ -246,12 +257,7 @@ func (s *Service) processContent(source string, content []byte) {
 		Timestamp: time.Now(),
 	}
 
-	select {
-	case s.errorChan <- errEvent:
-	default:
-		// Channel is full, log overflow
-		fmt.Printf("Error channel overflow, dropping error from %s\n", source)
-	}
+	s.sendError(errEvent)
 }
 
 // containsError checks if content contains error patterns
@@ -293,4 +299,15 @@ func (s *Service) AddPattern(pattern string, severity ErrorSeverity) error {
 
 func isValidSeverity(severity ErrorSeverity) bool {
 	return severity >= SeverityLow && severity <= SeverityHigh
+}
+
+func (s *Service) sendError(err *models.Error) {
+	log := logger.GetGlobalLogger()
+
+	select {
+	case s.errorChan <- err:
+		// Error sent successfully
+	default:
+		log.Error("Error channel overflow, dropping error from %s", err.Source)
+	}
 }

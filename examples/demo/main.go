@@ -2,26 +2,28 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
 	"time"
 
+	"github.com/HoyeonS/hephaestus/internal/logger"
 	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
 )
 
 func main() {
+	log := logger.GetGlobalLogger()
 
 	config := hephaestus.DefaultConfig()
 
 	err := config.Validate()
 
 	if err != nil {
-		fmt.Println("ERR : CONFIG", err.Error())
+		log.Error("ERR : CONFIG %s", err.Error())
+		return
 	}
 
 	client, err := hephaestus.NewClient(config)
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		log.Error("Error occurred: %v", err)
+		return
 	}
 
 	// Create a context with timeout
@@ -29,9 +31,11 @@ func main() {
 	defer cancel()
 
 	if err = client.Start(ctx); err != nil {
-		fmt.Println("Error Occured", err)
+		log.Error("Error occurred: %v", err)
 	} else {
-		fmt.Println("Hephaestus Initated")
+		log.Info("Hephaestus Initiated")
 	}
 
+	// Block main thread
+	// select {}
 }
