@@ -149,6 +149,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("AI provider must be specified")
 	} else {
 		fmt.Println("AI PROVIDER : OK, VAL : ", c.AIProvider)
+		if c.AIProvider == "updateme" {
+			fmt.Println("[WARN] : AI PROVIDER IS NOT UPDATED !! NEED TO BE CONFIGURED BEFORE PROCEED FIX !!")
+		}
 	}
 
 	// Validate knowledge base settings
