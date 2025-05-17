@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
 )
@@ -22,6 +24,14 @@ func main() {
 		log.Fatalf("Failed to create client: %v", err)
 	}
 
-	client.Start()
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err = client.Start(ctx); err != nil {
+		fmt.Println("Error Occured", err)
+	} else {
+		fmt.Println("Hephaestus Initated")
+	}
 
 }
