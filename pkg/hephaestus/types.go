@@ -6,13 +6,111 @@ import (
 	"time"
 )
 
-// SystemNode represents a Hephaestus system node instance
+// Config represents the system configuration
+type Config struct {
+	LogLevel   string            `yaml:"log_level"`
+	LogOutput  string            `yaml:"log_output"`
+	NodeID     string            `yaml:"node_id"`
+	Repository *RepositoryConfig `yaml:"repository"`
+	Model      *ModelConfig      `yaml:"model"`
+}
+
+// RepositoryConfig represents the repository configuration
+type RepositoryConfig struct {
+	Owner    string `yaml:"owner"`
+	Name     string `yaml:"name"`
+	Token    string `yaml:"token"`
+	BasePath string `yaml:"base_path"`
+	Branch   string `yaml:"branch"`
+}
+
+// ModelConfig represents the model configuration
+type ModelConfig struct {
+	Version  string `yaml:"version"`
+	APIKey   string `yaml:"api_key"`
+	BaseURL  string `yaml:"base_url"`
+	Timeout  int    `yaml:"timeout"`
+}
+
+// NodeStatus represents the operational status of a node
+type NodeStatus string
+
+const (
+	NodeStatusInitializing NodeStatus = "initializing"
+	NodeStatusActive       NodeStatus = "active"
+	NodeStatusError       NodeStatus = "error"
+	NodeStatusRemoved     NodeStatus = "removed"
+)
+
+// SystemNode represents a node in the system
 type SystemNode struct {
-	NodeIdentifier string
-	CurrentStatus  NodeOperationalStatus
-	NodeConfig     *SystemConfiguration
-	CreationTime   time.Time
-	LastUpdateTime time.Time
+	NodeID        string     `json:"node_id"`
+	Status        NodeStatus `json:"status"`
+	CreatedAt     time.Time  `json:"created_at"`
+	LastActive    time.Time  `json:"last_active"`
+}
+
+// LogEntryData represents a log entry from a node
+type LogEntryData struct {
+	NodeIdentifier string    `json:"node_identifier"`
+	LogMessage     string    `json:"log_message"`
+	LogLevel       string    `json:"log_level"`
+	ErrorTrace     string    `json:"error_trace,omitempty"`
+	Timestamp      time.Time `json:"timestamp"`
+}
+
+// ProposedSolution represents a solution proposed by the model
+type ProposedSolution struct {
+	SolutionID      string       `json:"solution_id"`
+	NodeIdentifier  string       `json:"node_identifier"`
+	AssociatedLog   *LogEntryData `json:"associated_log"`
+	ProposedChanges string       `json:"proposed_changes"`
+	GenerationTime  time.Time    `json:"generation_time"`
+	ConfidenceScore float64      `json:"confidence_score"`
+}
+
+// Issue represents a problem identified in the system
+type Issue struct {
+	IssueID       string    `json:"issue_id"`
+	Title         string    `json:"title"`
+	Description   string    `json:"description"`
+	Priority      string    `json:"priority"`
+	Status        string    `json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
+	LastUpdated   time.Time `json:"last_updated"`
+}
+
+// CodeChange represents a change to be made to the codebase
+type CodeChange struct {
+	FilePath    string `json:"file_path"`
+	StartLine   int    `json:"start_line"`
+	EndLine     int    `json:"end_line"`
+	OldContent  string `json:"old_content"`
+	NewContent  string `json:"new_content"`
+	Description string `json:"description"`
+}
+
+// MetricsCollectionService defines the interface for collecting metrics
+type MetricsCollectionService interface {
+	RecordNodeStatus(nodeID string, status string)
+	RecordOperationMetrics(operation string, duration time.Duration, success bool)
+	RecordErrorMetrics(source string, err error)
+}
+
+// RemoteRepositoryService defines the interface for interacting with remote repositories
+type RemoteRepositoryService interface {
+	Initialize(ctx context.Context) error
+	GetFileContents(ctx context.Context, path string) ([]byte, error)
+	UpdateFileContents(ctx context.Context, path string, content []byte, message string) error
+	CreatePullRequest(ctx context.Context, title, body, head, base string) (string, error)
+}
+
+// RepositoryManager defines the interface for managing repositories
+type RepositoryManager interface {
+	Initialize(ctx context.Context) error
+	GetFileContents(ctx context.Context, path string) ([]byte, error)
+	UpdateFileContents(ctx context.Context, path string, content []byte, message string) error
+	CreatePullRequest(ctx context.Context, title, body, head, base string) (string, error)
 }
 
 // NodeOperationalStatus represents the current operational state of a node
@@ -61,96 +159,6 @@ type RepositoryConfiguration struct {
 	RepositoryPath string `json:"path" yaml:"path"`
 	FileLimit      int    `json:"max_files" yaml:"max_files"`
 	FileSizeLimit  int64  `json:"max_file_size" yaml:"max_file_size"`
-}
-
-// LogEntryData represents a structured log entry from the client
-type LogEntryData struct {
-	NodeIdentifier string            `json:"node_id"`
-	LogLevel       string            `json:"level"`
-	LogMessage     string            `json:"message"`
-	LogTimestamp   time.Time         `json:"timestamp"`
-	LogMetadata    map[string]string `json:"metadata"`
-	ErrorTrace     string            `json:"stack_trace"`
-}
-
-// ProposedSolution represents a generated fix proposal for an issue
-type ProposedSolution struct {
-	SolutionID       string        `json:"id"`
-	NodeIdentifier   string        `json:"node_id"`
-	AssociatedLog    *LogEntryData `json:"log_entry"`
-	ProposedChanges  string        `json:"suggestion"`
-	AffectedFiles    []string      `json:"files"`
-	GenerationTime   time.Time     `json:"created_at"`
-	ConfidenceScore  float64       `json:"confidence"`
-}
-
-// NodeLifecycleManager manages the complete lifecycle of system nodes
-type NodeLifecycleManager interface {
-	// CreateSystemNode initializes a new node with the provided configuration
-	CreateSystemNode(ctx context.Context, config *SystemConfiguration) (*SystemNode, error)
-	
-	// GetSystemNode retrieves node information by identifier
-	GetSystemNode(ctx context.Context, nodeIdentifier string) (*SystemNode, error)
-	
-	// DeleteSystemNode removes a node from the system
-	DeleteSystemNode(ctx context.Context, nodeIdentifier string) error
-	
-	// UpdateNodeOperationalStatus updates the operational status of a node
-	UpdateNodeOperationalStatus(ctx context.Context, nodeIdentifier string, status NodeOperationalStatus) error
-}
-
-// LogProcessingService handles log entry processing and analysis
-type LogProcessingService interface {
-	// ProcessLogEntry processes a single log entry
-	ProcessLogEntry(ctx context.Context, entry *LogEntryData) error
-	
-	// StreamLogEntries initiates streaming of logs for a specific node
-	StreamLogEntries(ctx context.Context, nodeIdentifier string) (<-chan *LogEntryData, <-chan error)
-}
-
-// RepositoryManager manages the virtual repository system
-type RepositoryManager interface {
-	// InitializeRepository sets up the repository environment
-	InitializeRepository(ctx context.Context, config *RepositoryConfiguration) error
-	
-	// GetFileContents retrieves contents of a specific file
-	GetFileContents(ctx context.Context, filePath string) ([]byte, error)
-	
-	// UpdateFileContents updates the contents of a specific file
-	UpdateFileContents(ctx context.Context, filePath string, contents []byte) error
-	
-	// ListRepositoryFiles lists all files in the repository
-	ListRepositoryFiles(ctx context.Context) ([]string, error)
-}
-
-// ModelServiceProvider provides model-based analysis and solution generation
-type ModelServiceProvider interface {
-	// GenerateSolutionProposal generates a solution for a given log entry
-	GenerateSolutionProposal(ctx context.Context, entry *LogEntryData, repo RepositoryManager) (*ProposedSolution, error)
-	
-	// ValidateSolutionProposal validates a generated solution
-	ValidateSolutionProposal(ctx context.Context, solution *ProposedSolution) error
-}
-
-// RemoteRepositoryService manages remote repository operations
-type RemoteRepositoryService interface {
-	// CreateChangeRequest creates a change request for a proposed solution
-	CreateChangeRequest(ctx context.Context, solution *ProposedSolution) (string, error)
-	
-	// SynchronizeRepository ensures local and remote repositories are in sync
-	SynchronizeRepository(ctx context.Context) error
-}
-
-// MetricsCollectionService collects and manages system metrics
-type MetricsCollectionService interface {
-	// RecordOperationMetrics records metrics for an operation
-	RecordOperationMetrics(operationName string, duration time.Duration, successful bool)
-	
-	// RecordErrorMetrics records error-related metrics
-	RecordErrorMetrics(componentName string, err error)
-	
-	// GetCurrentMetrics retrieves current system metrics
-	GetCurrentMetrics() map[string]interface{}
 }
 
 // RepositoryFileNode represents a file in the virtual repository system
