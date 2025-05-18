@@ -20,7 +20,15 @@ func main() {
 		return
 	}
 
-	client, err := hephaestus.NewClient(config)
+	hephaestusConfig,_ := config.HephaestusConfigFactory(
+		collector_config.DefaultCollectorConfig(),
+		analyzer_config.DefaultAnalyzerConfig(),
+		generator.DefaultConfig(),
+		deployment.DefaultConfig(),
+		knowledge.DefaultConfig(),
+	)
+
+	client, err := hephaestus.New(hephaestusConfig)
 	if err != nil {
 		log.Error("Error occurred: %v", err)
 		return
@@ -35,6 +43,8 @@ func main() {
 	} else {
 		log.Info("Hephaestus Initiated...")
 	}
+
+
 
 	// Block main thread
 	// select {}
