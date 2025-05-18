@@ -51,6 +51,7 @@ cd hephaestus
 ### 4. Install Dependencies
 ```bash
 make deps
+make proto-setup
 ```
 
 ### 5. Generate Protocol Buffer Code
