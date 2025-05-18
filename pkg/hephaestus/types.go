@@ -6,30 +6,33 @@ import (
 	"time"
 )
 
-// Config represents the system configuration
+// Config represents the configuration for the Hephaestus service
 type Config struct {
-	LogLevel   string            `yaml:"log_level"`
-	LogOutput  string            `yaml:"log_output"`
-	NodeID     string            `yaml:"node_id"`
 	Repository *RepositoryConfig `yaml:"repository"`
 	Model      *ModelConfig      `yaml:"model"`
+	Log        *LogConfig        `yaml:"log"`
 }
 
-// RepositoryConfig represents the repository configuration
+// RepositoryConfig represents the configuration for the repository service
 type RepositoryConfig struct {
-	Owner    string `yaml:"owner"`
-	Name     string `yaml:"name"`
+	Type     string `yaml:"type"`
+	URL      string `yaml:"url"`
 	Token    string `yaml:"token"`
-	BasePath string `yaml:"base_path"`
 	Branch   string `yaml:"branch"`
+	BasePath string `yaml:"base_path"`
 }
 
-// ModelConfig represents the model configuration
+// ModelConfig represents the configuration for the model service
 type ModelConfig struct {
-	Version  string `yaml:"version"`
+	Provider string `yaml:"provider"`
 	APIKey   string `yaml:"api_key"`
-	BaseURL  string `yaml:"base_url"`
-	Timeout  int    `yaml:"timeout"`
+	Model    string `yaml:"model"`
+}
+
+// LogConfig represents the configuration for logging
+type LogConfig struct {
+	Level  string `yaml:"level"`
+	Output string `yaml:"output"`
 }
 
 // NodeStatus represents the operational status of a node
@@ -43,10 +46,10 @@ const (
 
 // SystemNode represents a node in the system
 type SystemNode struct {
-	NodeID        string     `json:"node_id"`
-	Status        NodeStatus `json:"status"`
-	CreatedAt     time.Time  `json:"created_at"`
-	LastActive    time.Time  `json:"last_active"`
+	ID         string     `json:"id"`
+	Status     NodeStatus `json:"status"`
+	CreatedAt  time.Time  `json:"created_at"`
+	LastActive time.Time  `json:"last_active"`
 }
 
 // LogEntryData represents a log entry from a node
@@ -114,20 +117,32 @@ type RepositoryManager interface {
 
 // NodeManager defines the interface for managing nodes
 type NodeManager interface {
-	Initialize(ctx context.Context) error
-	RegisterNode(ctx context.Context, node *SystemNode) error
-	UpdateNodeStatus(ctx context.Context, nodeID string, status NodeStatus) error
+	RegisterNode(ctx context.Context, nodeID string, logLevel string, logOutput string) error
 	GetNode(ctx context.Context, nodeID string) (*SystemNode, error)
-	ListNodes(ctx context.Context) ([]*SystemNode, error)
+	UpdateNodeStatus(ctx context.Context, nodeID string, status NodeStatus) error
 	RemoveNode(ctx context.Context, nodeID string) error
 }
 
 // ModelService defines the interface for model operations
 type ModelService interface {
+	GenerateSolution(ctx context.Context, prompt string) (string, error)
+	ValidateSolution(ctx context.Context, solution string) (bool, error)
+}
+
+// RepositoryService defines the interface for repository operations
+type RepositoryService interface {
 	Initialize(ctx context.Context) error
-	ProcessLogEntry(ctx context.Context, entry *LogEntryData) error
-	GenerateSolutionProposal(ctx context.Context, entry *LogEntryData) (*ProposedSolution, error)
-	ValidateSolutionProposal(ctx context.Context, solution *ProposedSolution) error
+	ApplyChanges(ctx context.Context, changes string) error
+	ValidateChanges(ctx context.Context, changes string) error
+	Cleanup(ctx context.Context) error
+}
+
+// RemoteService defines the interface for remote operations
+type RemoteService interface {
+	Connect(ctx context.Context) error
+	Disconnect(ctx context.Context) error
+	SendMessage(ctx context.Context, message string) error
+	ReceiveMessage(ctx context.Context) (string, error)
 }
 
 // NodeOperationalStatus represents the current operational state of a node
@@ -138,7 +153,7 @@ const (
 	NodeStatusOperational  NodeOperationalStatus = "operational"
 	NodeStatusProcessing   NodeOperationalStatus = "processing"
 	NodeStatusInactive     NodeOperationalStatus = "inactive"
-	NodeStatusError       NodeOperationalStatus = "error"
+	NodeStatusError        NodeOperationalStatus = "error"
 )
 
 // SystemConfiguration represents the complete configuration for a Hephaestus node

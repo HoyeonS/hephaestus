@@ -9,7 +9,6 @@ import (
 	pb "github.com/HoyeonS/hephaestus/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func main() {
@@ -40,12 +39,16 @@ func main() {
 	fmt.Printf("Node registration status: %s\n", registerResp.Status)
 
 	// Process a log entry
-	logEntry := &pb.LogEntry{
-		NodeId:    nodeID,
-		LogLevel:  "error",
-		Message:   "Failed to connect to database",
-		ErrorTrace: "Error: connection refused\nStack trace: ...",
-		Timestamp: timestamppb.Now(),
+	logEntry := &pb.LogEntryData{
+		NodeIdentifier: nodeID,
+		LogLevel:      "error",
+		LogMessage:    "Failed to connect to database",
+		ErrorTrace:    "Error: connection refused\nStack trace: ...",
+		LogTimestamp:  time.Now().Format(time.RFC3339),
+		LogMetadata: map[string]string{
+			"component": "database",
+			"service":   "user-service",
+		},
 	}
 
 	processResp, err := client.ProcessLogEntry(ctx, &pb.ProcessLogEntryRequest{
