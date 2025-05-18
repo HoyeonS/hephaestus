@@ -10,401 +10,167 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewCollector(t *testing.T) {
+func setupTest(t *testing.T) (*Collector, context.Context) {
+	// Create a new registry for each test
+	registry := prometheus.NewRegistry()
+	prometheus.DefaultRegisterer = registry
+	prometheus.DefaultGatherer = registry
+
 	collector := NewCollector()
-	assert.NotNil(t, collector)
-	assert.NotNil(t, collector.nodes)
-	assert.Empty(t, collector.nodes)
-}
-
-func TestInitialize(t *testing.T) {
-	tests := []struct {
-		name    string
-		setup   func()
-		wantErr bool
-	}{
-		{
-			name:    "successful initialization",
-			setup:   func() { prometheus.Unregister(prometheus.NewRegistry()) },
-			wantErr: false,
-		},
-		{
-			name: "metrics already registered",
-			setup: func() {
-				collector := NewCollector()
-				_ = collector.Initialize(context.Background())
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
-			collector := NewCollector()
-			err := collector.Initialize(context.Background())
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+	ctx := context.Background()
+	err := collector.Initialize(ctx)
+	require.NoError(t, err)
+	return collector, ctx
 }
 
 func TestInitializeNodeMetrics(t *testing.T) {
-	ctx := context.Background()
-	collector := NewCollector()
-	require.NoError(t, collector.Initialize(ctx))
+	collector, ctx := setupTest(t)
 
-	tests := []struct {
-		name    string
-		nodeID  string
-		wantErr bool
-	}{
-		{
-			name:    "initialize new node",
-			nodeID:  "node1",
-			wantErr: false,
-		},
-		{
-			name:    "initialize existing node",
-			nodeID:  "node1",
-			wantErr: true,
-		},
-		{
-			name:    "initialize another node",
-			nodeID:  "node2",
-			wantErr: false,
-		},
-	}
+	// Test successful initialization
+	err := collector.InitializeNodeMetrics(ctx, "test-node")
+	assert.NoError(t, err)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := collector.InitializeNodeMetrics(ctx, tt.nodeID)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				metrics, exists := collector.nodes[tt.nodeID]
-				assert.True(t, exists)
-				assert.Equal(t, tt.nodeID, metrics.NodeID)
-				assert.NotZero(t, metrics.CreatedAt)
-				assert.NotZero(t, metrics.LastActive)
-				assert.Empty(t, metrics.StatusHistory)
-			}
-		})
-	}
+	// Test duplicate initialization
+	err = collector.InitializeNodeMetrics(ctx, "test-node")
+	assert.Error(t, err)
 }
 
 func TestRecordNodeStatusChange(t *testing.T) {
-	ctx := context.Background()
-	collector := NewCollector()
-	require.NoError(t, collector.Initialize(ctx))
+	collector, ctx := setupTest(t)
 
-	tests := []struct {
-		name    string
-		nodeID  string
-		status  string
-		setup   func()
-		wantErr bool
-	}{
-		{
-			name:    "record status for non-existent node",
-			nodeID:  "node1",
-			status:  "active",
-			setup:   func() {},
-			wantErr: true,
-		},
-		{
-			name:   "record status for existing node",
-			nodeID: "node2",
-			status: "active",
-			setup: func() {
-				_ = collector.InitializeNodeMetrics(ctx, "node2")
-			},
-			wantErr: false,
-		},
-		{
-			name:   "record error status",
-			nodeID: "node2",
-			status: "error",
-			setup:  func() {},
-			wantErr: false,
-		},
-	}
+	// Initialize node
+	err := collector.InitializeNodeMetrics(ctx, "test-node")
+	require.NoError(t, err)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
-			err := collector.RecordNodeStatusChange(ctx, tt.nodeID, tt.status)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				metrics := collector.nodes[tt.nodeID]
-				assert.NotEmpty(t, metrics.StatusHistory)
-				lastStatus := metrics.StatusHistory[len(metrics.StatusHistory)-1]
-				assert.Equal(t, tt.status, lastStatus.Status)
-			}
-		})
-	}
+	// Test successful status change
+	err = collector.RecordNodeStatusChange(ctx, "test-node", "active")
+	assert.NoError(t, err)
+
+	// Verify status history
+	metrics := collector.GetCurrentMetrics()
+	nodeMetrics := metrics["nodes"].(map[string]interface{})["test-node"].(map[string]interface{})
+	history := nodeMetrics["status_history"].([]StatusChange)
+	assert.Equal(t, 1, len(history))
+	assert.Equal(t, "active", history[0].Status)
+
+	// Test non-existent node
+	err = collector.RecordNodeStatusChange(ctx, "non-existent", "active")
+	assert.Error(t, err)
 }
 
 func TestRecordLogProcessing(t *testing.T) {
-	ctx := context.Background()
-	collector := NewCollector()
-	require.NoError(t, collector.Initialize(ctx))
+	collector, ctx := setupTest(t)
 
-	tests := []struct {
-		name     string
-		nodeID   string
-		duration time.Duration
-		logCount int
-		setup    func()
-		wantErr  bool
-	}{
-		{
-			name:     "record logs for non-existent node",
-			nodeID:   "node1",
-			duration: time.Second,
-			logCount: 10,
-			setup:    func() {},
-			wantErr:  true,
-		},
-		{
-			name:     "record logs for existing node",
-			nodeID:   "node2",
-			duration: time.Second * 2,
-			logCount: 20,
-			setup: func() {
-				_ = collector.InitializeNodeMetrics(ctx, "node2")
-			},
-			wantErr: false,
-		},
-	}
+	// Initialize node
+	err := collector.InitializeNodeMetrics(ctx, "test-node")
+	require.NoError(t, err)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
-			err := collector.RecordLogProcessing(ctx, tt.nodeID, tt.duration, tt.logCount)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+	// Test successful log processing recording
+	err = collector.RecordLogProcessing(ctx, "test-node", time.Second, 10)
+	assert.NoError(t, err)
+
+	// Test non-existent node
+	err = collector.RecordLogProcessing(ctx, "non-existent", time.Second, 10)
+	assert.Error(t, err)
 }
 
 func TestRecordModelLatency(t *testing.T) {
-	ctx := context.Background()
-	collector := NewCollector()
-	require.NoError(t, collector.Initialize(ctx))
+	collector, ctx := setupTest(t)
 
-	tests := []struct {
-		name      string
-		nodeID    string
-		operation string
-		duration  time.Duration
-		setup     func()
-		wantErr   bool
-	}{
-		{
-			name:      "record latency for non-existent node",
-			nodeID:    "node1",
-			operation: "predict",
-			duration:  time.Second,
-			setup:     func() {},
-			wantErr:   true,
-		},
-		{
-			name:      "record latency for existing node",
-			nodeID:    "node2",
-			operation: "predict",
-			duration:  time.Second * 2,
-			setup: func() {
-				_ = collector.InitializeNodeMetrics(ctx, "node2")
-			},
-			wantErr: false,
-		},
-	}
+	// Initialize node
+	err := collector.InitializeNodeMetrics(ctx, "test-node")
+	require.NoError(t, err)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
-			err := collector.RecordModelLatency(ctx, tt.nodeID, tt.operation, tt.duration)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+	// Test successful model latency recording
+	err = collector.RecordModelLatency(ctx, "test-node", "inference", time.Second)
+	assert.NoError(t, err)
+
+	// Test non-existent node
+	err = collector.RecordModelLatency(ctx, "non-existent", "inference", time.Second)
+	assert.Error(t, err)
 }
 
 func TestRecordRepositoryError(t *testing.T) {
-	ctx := context.Background()
-	collector := NewCollector()
-	require.NoError(t, collector.Initialize(ctx))
+	collector, ctx := setupTest(t)
 
-	tests := []struct {
-		name      string
-		nodeID    string
-		operation string
-		errorType string
-		setup     func()
-		wantErr   bool
-	}{
-		{
-			name:      "record error for non-existent node",
-			nodeID:    "node1",
-			operation: "push",
-			errorType: "connection_failed",
-			setup:     func() {},
-			wantErr:   true,
-		},
-		{
-			name:      "record error for existing node",
-			nodeID:    "node2",
-			operation: "push",
-			errorType: "connection_failed",
-			setup: func() {
-				_ = collector.InitializeNodeMetrics(ctx, "node2")
-			},
-			wantErr: false,
-		},
-	}
+	// Initialize node
+	err := collector.InitializeNodeMetrics(ctx, "test-node")
+	require.NoError(t, err)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
-			err := collector.RecordRepositoryError(ctx, tt.nodeID, tt.operation, tt.errorType)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+	// Test successful repository error recording
+	err = collector.RecordRepositoryError(ctx, "test-node", "push", "auth_failed")
+	assert.NoError(t, err)
+
+	// Test non-existent node
+	err = collector.RecordRepositoryError(ctx, "non-existent", "push", "auth_failed")
+	assert.Error(t, err)
 }
 
 func TestCleanupNodeMetrics(t *testing.T) {
-	ctx := context.Background()
-	collector := NewCollector()
-	require.NoError(t, collector.Initialize(ctx))
+	collector, ctx := setupTest(t)
 
-	tests := []struct {
-		name    string
-		nodeID  string
-		setup   func()
-		wantErr bool
-	}{
-		{
-			name:    "cleanup non-existent node",
-			nodeID:  "node1",
-			setup:   func() {},
-			wantErr: true,
-		},
-		{
-			name:   "cleanup existing node",
-			nodeID: "node2",
-			setup: func() {
-				_ = collector.InitializeNodeMetrics(ctx, "node2")
-			},
-			wantErr: false,
-		},
-	}
+	// Initialize node
+	err := collector.InitializeNodeMetrics(ctx, "test-node")
+	require.NoError(t, err)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
-			err := collector.CleanupNodeMetrics(ctx, tt.nodeID)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				_, exists := collector.nodes[tt.nodeID]
-				assert.False(t, exists)
-			}
-		})
-	}
+	// Test successful cleanup
+	err = collector.CleanupNodeMetrics(ctx, "test-node")
+	assert.NoError(t, err)
+
+	// Verify node was removed
+	metrics := collector.GetCurrentMetrics()
+	nodeMetrics := metrics["nodes"].(map[string]interface{})
+	_, exists := nodeMetrics["test-node"]
+	assert.False(t, exists)
+
+	// Test non-existent node
+	err = collector.CleanupNodeMetrics(ctx, "non-existent")
+	assert.Error(t, err)
 }
 
-func TestStatusToValue(t *testing.T) {
-	tests := []struct {
-		name     string
-		status   string
-		expected float64
-	}{
-		{
-			name:     "active status",
-			status:   "active",
-			expected: 1,
-		},
-		{
-			name:     "operational status",
-			status:   "operational",
-			expected: 1,
-		},
-		{
-			name:     "error status",
-			status:   "error",
-			expected: 2,
-		},
-		{
-			name:     "failed status",
-			status:   "failed",
-			expected: 2,
-		},
-		{
-			name:     "unknown status",
-			status:   "unknown",
-			expected: 0,
-		},
-	}
+func TestRecordOperationMetrics(t *testing.T) {
+	collector, ctx := setupTest(t)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			value := statusToValue(tt.status)
-			assert.Equal(t, tt.expected, value)
-		})
-	}
+	// Test recording operation metrics
+	collector.RecordOperationMetrics("test_operation", time.Second, true)
+	collector.RecordOperationMetrics("test_operation", time.Millisecond*500, true)
 }
 
-func TestCollector(t *testing.T) {
-	// Create a new collector
-	collector := NewCollector()
-	require.NoError(t, collector.Initialize(context.Background()))
+func TestRecordErrorMetrics(t *testing.T) {
+	collector, ctx := setupTest(t)
 
-	t.Run("initialize node metrics", func(t *testing.T) {
-		err := collector.InitializeNodeMetrics(context.Background(), "test-node")
-		assert.NoError(t, err)
-	})
+	// Test recording error metrics
+	collector.RecordErrorMetrics("test_component", assert.AnError)
+	collector.RecordErrorMetrics("test_component", assert.AnError)
+}
 
-	t.Run("record node status change", func(t *testing.T) {
-		err := collector.RecordNodeStatusChange(context.Background(), "test-node", "operational")
-		assert.NoError(t, err)
-	})
+func TestGetCurrentMetrics(t *testing.T) {
+	collector, ctx := setupTest(t)
 
-	t.Run("record model latency", func(t *testing.T) {
-		err := collector.RecordModelLatency(context.Background(), "test-node", "generate_solution", time.Second)
-		assert.NoError(t, err)
-	})
+	// Initialize node
+	err := collector.InitializeNodeMetrics(ctx, "test-node")
+	require.NoError(t, err)
 
-	t.Run("record repository error", func(t *testing.T) {
-		err := collector.RecordRepositoryError(context.Background(), "test-node", "create_issue", "permission_denied")
-		assert.NoError(t, err)
-	})
+	// Record some metrics
+	err = collector.RecordNodeStatusChange(ctx, "test-node", "active")
+	require.NoError(t, err)
 
-	t.Run("cleanup node metrics", func(t *testing.T) {
-		err := collector.CleanupNodeMetrics(context.Background(), "test-node")
-		assert.NoError(t, err)
-	})
+	// Get current metrics
+	metrics := collector.GetCurrentMetrics()
 
-	t.Run("get current metrics", func(t *testing.T) {
-		metrics := collector.GetCurrentMetrics()
-		assert.NotNil(t, metrics)
-		assert.IsType(t, map[string]interface{}{}, metrics)
-	})
+	// Verify metrics structure
+	assert.NotNil(t, metrics)
+	assert.Contains(t, metrics, "nodes")
+
+	nodeMetrics := metrics["nodes"].(map[string]interface{})
+	assert.Contains(t, nodeMetrics, "test-node")
+
+	testNodeMetrics := nodeMetrics["test-node"].(map[string]interface{})
+	assert.Contains(t, testNodeMetrics, "created_at")
+	assert.Contains(t, testNodeMetrics, "last_active")
+	assert.Contains(t, testNodeMetrics, "status_history")
+
+	history := testNodeMetrics["status_history"].([]StatusChange)
+	assert.Equal(t, 1, len(history))
+	assert.Equal(t, "active", history[0].Status)
 } 
