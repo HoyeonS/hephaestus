@@ -183,6 +183,28 @@ message SystemConfiguration {
 }
 ```
 
+### RemoteRepositoryConfiguration
+```protobuf
+message RemoteRepositoryConfiguration {
+    string provider = 1;      // e.g., gitlab, bitbucket
+    string owner = 2;
+    string name = 3;
+    string token = 4;
+    string base_path = 5;
+    string branch = 6;
+}
+```
+
+### ModelServiceConfiguration
+```protobuf
+message ModelServiceConfiguration {
+    string version = 1;
+    string api_key = 2;
+    string base_url = 3;
+    int32 timeout = 4;
+}
+```
+
 ## Usage Examples
 
 ### Go Client

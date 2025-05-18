@@ -38,12 +38,6 @@ type LogConfig struct {
 // NodeStatus represents the operational status of a node
 type NodeStatus string
 
-const (
-	NodeStatusInitializing NodeStatus = "initializing"
-	NodeStatusReady       NodeStatus = "ready"
-	NodeStatusError       NodeStatus = "error"
-)
-
 // SystemNode represents a node in the system
 type SystemNode struct {
 	ID         string     `json:"id"`
@@ -63,23 +57,23 @@ type LogEntryData struct {
 
 // ProposedSolution represents a solution proposed by the model
 type ProposedSolution struct {
-	SolutionID      string       `json:"solution_id"`
-	NodeIdentifier  string       `json:"node_identifier"`
+	SolutionID      string        `json:"solution_id"`
+	NodeIdentifier  string        `json:"node_identifier"`
 	AssociatedLog   *LogEntryData `json:"associated_log"`
-	ProposedChanges string       `json:"proposed_changes"`
-	GenerationTime  time.Time    `json:"generation_time"`
-	ConfidenceScore float64      `json:"confidence_score"`
+	ProposedChanges string        `json:"proposed_changes"`
+	GenerationTime  time.Time     `json:"generation_time"`
+	ConfidenceScore float64       `json:"confidence_score"`
 }
 
 // Issue represents a problem identified in the system
 type Issue struct {
-	IssueID       string    `json:"issue_id"`
-	Title         string    `json:"title"`
-	Description   string    `json:"description"`
-	Priority      string    `json:"priority"`
-	Status        string    `json:"status"`
-	CreatedAt     time.Time `json:"created_at"`
-	LastUpdated   time.Time `json:"last_updated"`
+	IssueID     string    `json:"issue_id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Priority    string    `json:"priority"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
+	LastUpdated time.Time `json:"last_updated"`
 }
 
 // CodeChange represents a change to be made to the codebase
@@ -158,19 +152,19 @@ const (
 
 // SystemConfiguration represents the complete configuration for a Hephaestus node
 type SystemConfiguration struct {
-	RemoteSettings    RemoteRepositoryConfiguration `json:"remote" yaml:"remote"`
-	ModelSettings     ModelServiceConfiguration     `json:"model" yaml:"model"`
-	LoggingSettings   LoggingConfiguration         `json:"log" yaml:"log"`
-	OperationalMode   string                       `json:"mode" yaml:"mode"`
-	RepositorySettings RepositoryConfiguration     `json:"repository" yaml:"repository"`
+	RemoteSettings     RemoteRepositoryConfiguration `json:"remote" yaml:"remote"`
+	ModelSettings      ModelServiceConfiguration     `json:"model" yaml:"model"`
+	LoggingSettings    LoggingConfiguration          `json:"log" yaml:"log"`
+	OperationalMode    string                        `json:"mode" yaml:"mode"`
+	RepositorySettings RepositoryConfiguration       `json:"repository" yaml:"repository"`
 }
 
 // RemoteRepositoryConfiguration contains remote repository integration settings
 type RemoteRepositoryConfiguration struct {
-	AuthToken        string `json:"token" yaml:"token"`
-	RepositoryOwner  string `json:"owner" yaml:"owner"`
-	RepositoryName   string `json:"repository" yaml:"repository"`
-	TargetBranch     string `json:"branch" yaml:"branch"`
+	AuthToken       string `json:"token" yaml:"token"`
+	RepositoryOwner string `json:"owner" yaml:"owner"`
+	RepositoryName  string `json:"repository" yaml:"repository"`
+	TargetBranch    string `json:"branch" yaml:"branch"`
 }
 
 // ModelServiceConfiguration contains model service provider settings
@@ -195,19 +189,19 @@ type RepositoryConfiguration struct {
 
 // RepositoryFileNode represents a file in the virtual repository system
 type RepositoryFileNode struct {
-	FileIdentifier string            `json:"id"`
-	FilePath       string            `json:"path"`     // relative to repo root
-	FileContents   string            `json:"content"`
-	FileLanguage   string            `json:"language"` // programming language
-	LastModified   time.Time         `json:"last_updated"`
-	FileMetadata   FileMetadataInfo  `json:"metadata"`
+	FileIdentifier string           `json:"id"`
+	FilePath       string           `json:"path"` // relative to repo root
+	FileContents   string           `json:"content"`
+	FileLanguage   string           `json:"language"` // programming language
+	LastModified   time.Time        `json:"last_updated"`
+	FileMetadata   FileMetadataInfo `json:"metadata"`
 }
 
 // FileMetadataInfo contains extended file information
 type FileMetadataInfo struct {
-	TotalLines    int      `json:"line_count"`
-	Dependencies  []string `json:"imports"`      // list of imports/dependencies
-	VersionInfo   VersionControlInfo  `json:"version_info"`
+	TotalLines   int                `json:"line_count"`
+	Dependencies []string           `json:"imports"` // list of imports/dependencies
+	VersionInfo  VersionControlInfo `json:"version_info"`
 }
 
 // VersionControlInfo contains version control specific file information
@@ -219,12 +213,12 @@ type VersionControlInfo struct {
 
 // VirtualRepositorySystem represents the complete virtual repository
 type VirtualRepositorySystem struct {
-	RepositoryID    string                    `json:"id"`
-	RemoteReference string                    `json:"remote_repo"`
-	TargetBranch    string                    `json:"branch"`
+	RepositoryID    string                         `json:"id"`
+	RemoteReference string                         `json:"remote_repo"`
+	TargetBranch    string                         `json:"branch"`
 	FileCollection  map[string]*RepositoryFileNode `json:"files"`
-	LastSyncTime    time.Time                 `json:"last_synced"`
-	SystemConfig    *SystemConfiguration      `json:"configuration"`
+	LastSyncTime    time.Time                      `json:"last_synced"`
+	SystemConfig    *SystemConfiguration           `json:"configuration"`
 }
 
 // InitializationResponse represents the response from node initialization
@@ -236,11 +230,11 @@ type InitializationResponse struct {
 
 // CodeModification represents a specific code change in a solution
 type CodeModification struct {
-	TargetFile    string `json:"file_path"`
-	OriginalCode  string `json:"original_code"`
-	ModifiedCode  string `json:"updated_code"`
-	StartLine     int    `json:"line_start"`
-	EndLine       int    `json:"line_end"`
+	TargetFile   string `json:"file_path"`
+	OriginalCode string `json:"original_code"`
+	ModifiedCode string `json:"updated_code"`
+	StartLine    int    `json:"line_start"`
+	EndLine      int    `json:"line_end"`
 }
 
 // ConfigurationValidationError represents a configuration validation error
@@ -291,4 +285,4 @@ func ValidateSystemConfiguration(config *SystemConfiguration) error {
 	}
 
 	return nil
-} 
+}

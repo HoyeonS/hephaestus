@@ -1,13 +1,13 @@
 # Hephaestus
 
-Hephaestus is a sophisticated automated system for monitoring, analyzing, and resolving issues in distributed systems. Named after the Greek god of craftsmanship and technology, this tool leverages AI to provide intelligent solutions for system problems.
+Hephaestus is a sophisticated automated system for monitoring, analyzing, and resolving issues in distributed systems. Named after the Greek god of craftsmanship and technology, this tool leverages machine learning models to provide intelligent solutions for system problems.
 
 ## Features
 
-- **Automated Log Analysis**: Real-time processing and analysis of system logs using advanced AI models
-- **Intelligent Problem Resolution**: AI-powered generation of solution proposals for identified issues
+- **Automated Log Analysis**: Real-time processing and analysis of system logs using advanced machine learning models
+- **Intelligent Problem Resolution**: Model-powered generation of solution proposals for identified issues
 - **Distributed Node Management**: Robust management of distributed system nodes
-- **Secure Remote Repository Integration**: Seamless integration with remote repositories for code management
+- **Remote Repository Integration**: Seamless integration with version control systems
 - **Metrics Collection**: Comprehensive system metrics collection and monitoring
 - **gRPC-based Communication**: High-performance communication between components using gRPC
 - **Flexible Configuration**: Extensive configuration options for all system components
@@ -22,19 +22,19 @@ Hephaestus is a sophisticated automated system for monitoring, analyzing, and re
    - Manages node configuration
 
 2. **Model Service** (`internal/model/service.go`)
-   - Provides AI-powered solution generation
+   - Provides model-powered solution generation
    - Validates proposed solutions
    - Manages model sessions and configurations
 
-3. **Remote Service** (`internal/remote/service.go`)
-   - Handles interactions with remote repositories
-   - Manages file operations and pull requests
+3. **Remote Repository Service** (`internal/remote/service.go`)
+   - Handles interactions with version control systems
+   - Manages file operations and change requests
    - Provides repository connection management
 
 4. **Repository Service** (`internal/repository/service.go`)
    - Coordinates repository operations
    - Manages file content retrieval and updates
-   - Handles pull request creation
+   - Handles change request creation
 
 5. **Logger** (`internal/logger/logger.go`)
    - Provides structured logging capabilities
@@ -92,9 +92,10 @@ log_output: stdout
 node_id: your-node-id
 
 repository:
+  provider: your-provider # e.g., gitlab, bitbucket
   owner: your-repo-owner
   name: your-repo-name
-  token: your-github-token
+  token: your-access-token
   base_path: /path/to/repo
   branch: main
 
@@ -118,7 +119,7 @@ make integration-test  # Run integration tests
 ### Starting the Server
 
 ```bash
-./hephaestus
+./hephaestus server
 ```
 
 ### Using the Client
@@ -141,7 +142,7 @@ client := pb.NewHephaestusServiceClient(conn)
 │   ├── config/     # Configuration management
 │   ├── logger/     # Logging system
 │   ├── metrics/    # Metrics collection
-│   ├── model/      # AI model service
+│   ├── model/      # Model service
 │   ├── node/       # Node management
 │   ├── remote/     # Remote repository service
 │   ├── repository/ # Repository management
@@ -159,7 +160,7 @@ client := pb.NewHephaestusServiceClient(conn)
 3. Run tests: `make test`
 4. Format code: `make fmt`
 5. Run linters: `make lint`
-6. Submit a pull request
+6. Submit a change request
 
 ## Contributing
 
@@ -167,7 +168,7 @@ client := pb.NewHephaestusServiceClient(conn)
 2. Create your feature branch
 3. Commit your changes
 4. Push to the branch
-5. Create a new Pull Request
+5. Create a new change request
 
 ## License
 

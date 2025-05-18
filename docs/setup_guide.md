@@ -1,286 +1,229 @@
 # Hephaestus Setup Guide
 
-This guide will help you set up Hephaestus for both development and production use.
-
 ## Prerequisites
 
-- Go 1.21 or later
-- Protocol Buffers compiler (protoc) v3.15.0 or later
-- Docker (optional, for containerized deployment)
+### Required Software
+- Go 1.19 or later
+- Protocol Buffers compiler (protoc)
+- Make
 - Git
-- Make (for build automation)
+- Docker (optional, for containerized deployment)
 
-## Installation Steps
+### System Requirements
+- 2 CPU cores
+- 4GB RAM
+- 20GB disk space
 
-### 1. Install Dependencies
+## Installation
 
-#### For macOS:
+### 1. Install Go
 ```bash
-# Install Homebrew if not already installed
+# macOS (using Homebrew)
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Install Go
 brew install go
 
-# Install Protocol Buffers
+# Linux (Ubuntu/Debian)
+sudo apt-get update
+sudo apt-get install golang-go
+
+# Windows
+# Download installer from https://golang.org/dl/
+```
+
+### 2. Install Protocol Buffers
+```bash
+# macOS
 brew install protobuf
 
-# Install gRPC tools
-go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+# Linux (Ubuntu/Debian)
+sudo apt-get install protobuf-compiler
+
+# Windows
+# Download from https://github.com/protocolbuffers/protobuf/releases
 ```
 
-#### For Linux (Ubuntu/Debian):
-```bash
-# Install Go
-wget https://go.dev/dl/go1.21.0.linux-amd64.tar.gz
-sudo tar -C /usr/local -xzf go1.21.0.linux-amd64.tar.gz
-echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
-source ~/.bashrc
-
-# Install Protocol Buffers
-sudo apt-get update
-sudo apt-get install -y protobuf-compiler
-
-# Install gRPC tools
-go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-```
-
-### 2. Clone the Repository
-
+### 3. Clone Repository
 ```bash
 git clone https://github.com/HoyeonS/hephaestus.git
 cd hephaestus
 ```
 
-### 3. Set Up Development Environment
-
+### 4. Install Dependencies
 ```bash
-# Add GOPATH to your environment if not already done
-echo 'export GOPATH=$HOME/go' >> ~/.bashrc
-echo 'export PATH=$PATH:$GOPATH/bin' >> ~/.bashrc
-source ~/.bashrc
+make deps
+```
 
-# Install project dependencies
-go mod download
-
-# Generate Protocol Buffer code
+### 5. Generate Protocol Buffer Code
+```bash
 make proto
 ```
 
-### 4. Build the Project
-
+### 6. Build Project
 ```bash
-# Build all components
 make build
-
-# Run tests
-make test
-
-# Build Docker image (optional)
-make docker-build
 ```
 
 ## Configuration
 
-### 1. Environment Variables
-
-Create a `.env` file in the project root:
-
-```env
-# Server Configuration
-HEPHAESTUS_PORT=50051
-HEPHAESTUS_HOST=localhost
-HEPHAESTUS_MODE=development
-
-# GitHub Configuration (if using GitHub integration)
-GITHUB_TOKEN=your_github_token
-GITHUB_OWNER=your_github_username
-GITHUB_REPO=your_repository_name
-
-# Logging Configuration
-LOG_LEVEL=info
-LOG_FORMAT=json
-
-# Security Configuration
-TLS_ENABLED=false
-TLS_CERT_PATH=/path/to/cert
-TLS_KEY_PATH=/path/to/key
-```
-
-### 2. Application Configuration
-
-Create a `config.yaml` file:
+### 1. Create Configuration File
+Create a file named `config.yaml` in the project root:
 
 ```yaml
-server:
-  host: localhost
-  port: 50051
-  mode: development
+# Basic Configuration
+log_level: info
+log_output: stdout
+node_id: your-node-id
+mode: suggest  # or deploy
 
-github:
-  enabled: true
-  owner: your_github_username
-  repo: your_repository_name
+# Remote Repository Configuration
+repository:
+  provider: your-provider  # e.g., gitlab, bitbucket
+  owner: your-repo-owner
+  name: your-repo-name
+  token: your-access-token
+  base_path: /path/to/repo
+  branch: main
 
+# Model Service Configuration
+model:
+  provider: your-provider
+  api_key: your-model-api-key
+  base_url: https://api.example.com
+  timeout: 30
+
+# Logging Configuration
 logging:
   level: info
   format: json
   output: stdout
 
-security:
-  tls:
-    enabled: false
-    certPath: /path/to/cert
-    keyPath: /path/to/key
+# Metrics Configuration
+metrics:
+  enabled: true
+  port: 9090
 ```
 
-## Running the Application
-
-### Development Mode
+### 2. Environment Variables
+You can also configure the service using environment variables:
 
 ```bash
-# Run the server
-make run
+# Basic Configuration
+export LOG_LEVEL=info
+export LOG_OUTPUT=stdout
+export NODE_ID=your-node-id
+export MODE=suggest
 
-# Run with specific configuration
-HEPHAESTUS_CONFIG_PATH=./config.yaml make run
+# Remote Repository Configuration
+export REPOSITORY_PROVIDER=your-provider
+export REPOSITORY_TOKEN=your-access-token
+export REPOSITORY_OWNER=your-repo-owner
+export REPOSITORY_NAME=your-repo-name
+export REPOSITORY_BRANCH=main
+
+# Model Service Configuration
+export MODEL_PROVIDER=your-provider
+export MODEL_API_KEY=your-model-api-key
 ```
 
-### Production Mode
+## Running the Service
 
+### 1. Start the Server
 ```bash
-# Using Docker
-docker run -p 50051:50051 \
+./hephaestus server
+```
+
+### 2. Run with Docker
+```bash
+# Build Docker image
+docker build -t hephaestus .
+
+# Run container
+docker run -d \
+  --name hephaestus \
+  -p 50051:50051 \
   -v $(pwd)/config.yaml:/app/config.yaml \
-  -e HEPHAESTUS_MODE=production \
-  hephaestus:latest
-
-# Using systemd
-sudo cp deployment/hephaestus.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable hephaestus
-sudo systemctl start hephaestus
+  hephaestus
 ```
 
 ## Verification
 
-### 1. Check Server Status
-
+### 1. Check Service Status
 ```bash
-# Check if server is running
 curl http://localhost:50051/health
-
-# Check server version
-curl http://localhost:50051/version
 ```
 
-### 2. Run Example Client
-
+### 2. Run Tests
 ```bash
-# Run the example initialization client
-go run examples/initialization/main.go
+make test          # Run all tests
+make unit-test     # Run unit tests only
+make integration-test  # Run integration tests
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Protocol Buffer Generation Fails**
-   - Ensure protoc is installed correctly
-   - Check GOPATH is set properly
-   - Verify protoc-gen-go and protoc-gen-go-grpc are installed
-
-2. **Server Won't Start**
-   - Check port availability
-   - Verify configuration file paths
-   - Check log files for errors
-
-3. **GitHub Integration Issues**
-   - Verify GitHub token permissions
+1. **Connection Issues**
    - Check network connectivity
-   - Validate repository access
+   - Verify port availability
+   - Check firewall settings
+
+2. **Authentication Errors**
+   - Verify access tokens
+   - Check permissions
+   - Validate configuration
+
+3. **Resource Issues**
+   - Monitor system resources
+   - Check disk space
+   - Verify memory usage
 
 ### Logging
 
-- Logs are written to stdout by default
-- Check system logs: `journalctl -u hephaestus`
-- Enable debug logging by setting `LOG_LEVEL=debug`
+1. **View Logs**
+   ```bash
+   # View service logs
+   tail -f /var/log/hephaestus.log
 
-## Development Tools
+   # View Docker logs
+   docker logs -f hephaestus
+   ```
 
-### Recommended VSCode Extensions
+2. **Change Log Level**
+   ```bash
+   # Update config.yaml
+   log_level: debug
 
-- Go extension
-- Protocol Buffers extension
-- Docker extension
-- YAML extension
-
-### Code Generation
-
-```bash
-# Generate mocks
-make generate-mocks
-
-# Generate Protocol Buffer code
-make proto
-
-# Generate API documentation
-make docs
-```
-
-### Testing
-
-```bash
-# Run all tests
-make test
-
-# Run specific tests
-go test ./pkg/hephaestus/...
-
-# Run with coverage
-make test-coverage
-```
-
-## Next Steps
-
-1. Read the [API Documentation](./api.md)
-2. Explore [Example Code](../examples/)
-3. Review [Architecture Documentation](./HLD.md)
-4. Join the [Community](../CONTRIBUTING.md)
-
-## Support
-
-- Create an issue on GitHub
-- Join our Discord community
-- Check the FAQ
-- Contact the maintainers
-
-## Security Considerations
-
-1. Always use HTTPS/TLS in production
-2. Secure your GitHub tokens
-3. Follow the security guidelines in the documentation
-4. Regularly update dependencies
+   # Or use environment variable
+   export LOG_LEVEL=debug
+   ```
 
 ## Maintenance
 
-1. Regular Updates
-   ```bash
-   # Update dependencies
-   go get -u ./...
-   
-   # Update Protocol Buffers
-   make proto
-   ```
+### 1. Backup Configuration
+```bash
+cp config.yaml config.yaml.backup
+```
 
-2. Monitoring
-   - Set up Prometheus metrics
-   - Configure alerting
-   - Monitor system resources
+### 2. Update Service
+```bash
+git pull
+make build
+systemctl restart hephaestus
+```
 
-3. Backup
-   - Regularly backup configuration
-   - Document deployment settings
-   - Version control all changes 
+### 3. Monitor Resources
+```bash
+# Check system resources
+top -p $(pgrep hephaestus)
+
+# Check disk usage
+df -h /var/log/hephaestus
+```
+
+## Support
+
+For additional support:
+1. Check the documentation
+2. Review issue tracker
+3. Contact the maintainers 

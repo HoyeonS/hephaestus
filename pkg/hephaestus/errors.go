@@ -5,43 +5,97 @@ import (
 	"fmt"
 )
 
+// Common errors
 var (
 	// ErrInvalidConfig indicates an invalid configuration
 	ErrInvalidConfig = errors.New("invalid configuration")
 
-	// ErrNodeNotFound indicates a node was not found
-	ErrNodeNotFound = errors.New("node not found")
+	// ErrInvalidArgument indicates an invalid argument
+	ErrInvalidArgument = errors.New("invalid argument")
 
-	// ErrNodeAlreadyExists indicates a node already exists
-	ErrNodeAlreadyExists = errors.New("node already exists")
+	// ErrNotFound indicates a resource was not found
+	ErrNotFound = errors.New("not found")
 
-	// ErrInvalidNodeStatus indicates an invalid node status
-	ErrInvalidNodeStatus = errors.New("invalid node status")
+	// ErrAlreadyExists indicates a resource already exists
+	ErrAlreadyExists = errors.New("already exists")
 
-	// ErrRepositoryNotInitialized indicates the repository is not initialized
-	ErrRepositoryNotInitialized = errors.New("repository not initialized")
+	// ErrUnavailable indicates a service is unavailable
+	ErrUnavailable = errors.New("service unavailable")
 
-	// ErrFileNotFound indicates a file was not found
-	ErrFileNotFound = errors.New("file not found")
+	// ErrTimeout indicates an operation timed out
+	ErrTimeout = errors.New("operation timed out")
 
-	// ErrFileTooLarge indicates a file exceeds the size limit
-	ErrFileTooLarge = errors.New("file too large")
+	// ErrCanceled indicates an operation was canceled
+	ErrCanceled = errors.New("operation canceled")
 
-	// ErrInvalidLogEntry indicates an invalid log entry
-	ErrInvalidLogEntry = errors.New("invalid log entry")
+	// ErrModelProviderError indicates an error from the model provider
+	ErrModelProviderError = errors.New("model provider error")
 
-	// ErrAIProviderError indicates an error from the AI provider
-	ErrAIProviderError = errors.New("AI provider error")
+	// ErrRemoteRepositoryError indicates an error from the remote repository
+	ErrRemoteRepositoryError = errors.New("remote repository error")
 
-	// ErrGitHubError indicates an error from GitHub
-	ErrGitHubError = errors.New("GitHub error")
+	// ErrNodeError indicates an error from a node
+	ErrNodeError = errors.New("node error")
 
-	// ErrInvalidSolution indicates an invalid solution
-	ErrInvalidSolution = errors.New("invalid solution")
+	// ErrLogError indicates a logging error
+	ErrLogError = errors.New("log error")
 
-	// ErrOperationTimeout indicates an operation timed out
-	ErrOperationTimeout = errors.New("operation timed out")
+	// ErrMetricsError indicates a metrics collection error
+	ErrMetricsError = errors.New("metrics error")
 )
+
+// ModelError represents a model provider error
+type ModelError struct {
+	Provider string
+	Message  string
+	Err      error
+}
+
+func (e *ModelError) Error() string {
+	return fmt.Sprintf("model error (%s): %s: %v", e.Provider, e.Message, e.Err)
+}
+
+func (e *ModelError) Unwrap() error {
+	return e.Err
+}
+
+// RemoteRepositoryError represents a remote repository API error
+type RemoteRepositoryError struct {
+	Provider  string
+	Operation string
+	Message   string
+	Err       error
+}
+
+func (e *RemoteRepositoryError) Error() string {
+	return fmt.Sprintf("remote repository error (%s): %s: %v", e.Operation, e.Message, e.Err)
+}
+
+func (e *RemoteRepositoryError) Unwrap() error {
+	return e.Err
+}
+
+// NodeError represents a node-specific error
+type NodeError struct {
+	NodeID  string
+	Message string
+	Err     error
+}
+
+func (e *NodeError) Error() string {
+	return fmt.Sprintf("node error (%s): %s: %v", e.NodeID, e.Message, e.Err)
+}
+
+func (e *NodeError) Unwrap() error {
+	return e.Err
+}
+
+// IsProviderError checks if the error is from an external provider
+func IsProviderError(err error) bool {
+	var modelErr *ModelError
+	var repoErr *RemoteRepositoryError
+	return errors.As(err, &modelErr) || errors.As(err, &repoErr)
+}
 
 // ConfigValidationError represents a configuration validation error
 type ConfigValidationError struct {
@@ -51,21 +105,6 @@ type ConfigValidationError struct {
 
 func (e *ConfigValidationError) Error() string {
 	return fmt.Sprintf("config validation error: %s: %s", e.Field, e.Message)
-}
-
-// NodeError represents a node-related error
-type NodeError struct {
-	NodeID  string
-	Message string
-	Err     error
-}
-
-func (e *NodeError) Error() string {
-	return fmt.Sprintf("node error (ID: %s): %s: %v", e.NodeID, e.Message, e.Err)
-}
-
-func (e *NodeError) Unwrap() error {
-	return e.Err
 }
 
 // RepositoryError represents a repository-related error

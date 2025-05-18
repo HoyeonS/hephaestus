@@ -2,7 +2,7 @@
 
 ## Overview
 
-Hephaestus is designed as a distributed system that processes system logs, analyzes them using AI models, and generates solutions for identified issues. The system is built using a modular architecture with clear separation of concerns.
+Hephaestus is designed as a distributed system that processes system logs, analyzes them using machine learning models, and generates solutions for identified issues. The system is built using a modular architecture with clear separation of concerns.
 
 ## Core Components
 
@@ -25,10 +25,10 @@ The Node Manager is responsible for managing the lifecycle of system nodes.
 
 ### 2. Model Service (`internal/model/service.go`)
 
-The Model Service handles interactions with AI models for solution generation.
+The Model Service handles interactions with machine learning models for solution generation.
 
 #### Key Features:
-- AI model integration
+- Model integration and management
 - Solution generation and validation
 - Session management
 - Metrics tracking
@@ -39,20 +39,20 @@ The Model Service handles interactions with AI models for solution generation.
 - `Initialize`: Sets up the model service with configuration
 - `Cleanup`: Cleans up resources for a node
 
-### 3. Remote Service (`internal/remote/service.go`)
+### 3. Remote Repository Service (`internal/remote/service.go`)
 
-The Remote Service manages interactions with remote repositories.
+The Remote Repository Service manages interactions with version control systems.
 
 #### Key Features:
-- GitHub integration
+- Version control system integration
 - File operations
-- Pull request management
+- Change request management
 - Connection management
 
 #### Key Methods:
 - `GetFileContents`: Retrieves file contents from the repository
 - `UpdateFileContents`: Updates file contents in the repository
-- `CreatePullRequest`: Creates a new pull request
+- `CreateChangeRequest`: Creates a new change request
 - `CreateIssue`: Creates a new issue in the repository
 
 ### 4. Repository Service (`internal/repository/service.go`)
@@ -62,13 +62,13 @@ The Repository Service coordinates repository operations.
 #### Key Features:
 - Repository operation coordination
 - File management
-- Integration with remote services
+- Integration with remote repository services
 - Metrics collection
 
 #### Key Methods:
 - `GetFileContents`: Retrieves file contents
 - `UpdateFileContents`: Updates file contents
-- `CreatePullRequest`: Creates pull requests
+- `CreateChangeRequest`: Creates change requests
 - `Initialize`: Initializes the repository service
 
 ### 5. Logger (`internal/logger/logger.go`)
@@ -129,7 +129,7 @@ The system uses gRPC for communication between components.
 
 2. **Solution Generation**:
    ```
-   Model Service -> Remote Service -> Repository Service -> Client
+   Model Service -> Remote Repository Service -> Repository Service -> Client
    ```
 
 3. **Node Management**:
@@ -164,7 +164,7 @@ The system uses gRPC for communication between components.
 ### Key Security Features:
 
 1. **Authentication**:
-   - GitHub token-based authentication
+   - Version control system token-based authentication
    - API key management
    - Node authentication
 

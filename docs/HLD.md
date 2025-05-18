@@ -1,214 +1,189 @@
-# High-Level Design (HLD)
-
-## Overview
-
-Hephaestus is designed as a distributed system that provides intelligent code analysis and automated fix generation through real-time log monitoring. The system is built with scalability, reliability, and extensibility in mind.
+# High-Level Design Document
 
 ## System Architecture
 
-### Component Diagram
+The Hephaestus system is designed as a distributed service for monitoring and resolving system issues. Below is the high-level architecture diagram:
 
 ```mermaid
 graph TD
-    subgraph Client Application
-        A[Application Code] -->|Logs| B[Hephaestus Client]
-    end
-    
-    subgraph Hephaestus Service
-        C[gRPC Server] -->|Initialize| D[Node Manager]
-        C -->|Stream| E[Log Processor]
-        E -->|Analyze| F[AI Engine]
-        D -->|Fetch| G[GitHub Integration]
-        F -->|Generate| H[Solution Generator]
-        H -->|Deploy| G
-    end
-    
-    B -->|gRPC| C
-    G -->|API| I[GitHub]
-    F -->|API| J[AI Provider]
+    A[Client] -->|Request| B[Load Balancer]
+    B -->|Route| C[Server]
+    C -->|Process| D[Repository Service]
+    C -->|Stream| E[Log Processor]
+    E -->|Analyze| F[Model Engine]
+    D -->|Fetch| G[Remote Repository Integration]
+    C -->|Monitor| H[Metrics Collector]
+    G -->|API| I[Remote Repository]
+    F -->|API| J[Model Provider]
 ```
 
 ## Core Components
 
-### 1. Node Manager
-- Handles node lifecycle (creation, monitoring, cleanup)
+### 1. Repository Service
+- Manages file operations
 - Maintains virtual repository state
-- Manages configuration and validation
-- Coordinates between components
+- Coordinates with remote repository service
+- Handles change request creation
 
 ### 2. Log Processor
-- Receives and buffers log streams
-- Filters logs based on threshold levels
+- Processes incoming log streams
+- Filters and categorizes logs
 - Maintains log context for analysis
-- Handles backpressure
+- Routes logs to appropriate handlers
 
-### 3. Virtual Repository
-- In-memory representation of codebase
-- File metadata and content caching
-- Language-specific parsing
-- Dependency tracking
+### 3. Node Manager
+- Manages node lifecycle
+- Tracks node health
+- Handles node registration
+- Coordinates node operations
 
-### 4. AI Integration
-- Provider abstraction layer
-- Context preparation for AI
-- Solution validation
-- Rate limiting and retry logic
+### 4. Model Integration
+- Processes log data
+- Context preparation for model
+- Solution generation
+- Validation of proposals
 
-### 5. GitHub Integration
+### 5. Remote Repository Integration
+- Version control system integration
+- File operations
+- Change request management
 - Repository synchronization
-- Pull request management
-- Change validation
-- Access control
 
 ## Data Flow
 
-### 1. Initialization Flow
+### 1. Log Processing Flow
 ```mermaid
 sequenceDiagram
     participant C as Client
     participant S as Server
-    participant G as GitHub
-    participant V as VirtualRepo
-
-    C->>S: Initialize(config)
-    S->>S: Validate Config
-    S->>G: Fetch Repository
-    G->>S: Repository Data
-    S->>V: Create Virtual Repository
-    S->>C: Node ID
+    participant L as Log Processor
+    participant M as Model Engine
+    C->>S: Send Logs
+    S->>L: Process Logs
+    L->>M: Analyze
+    M->>S: Generate Solution
+    S->>C: Return Response
 ```
 
-### 2. Log Processing Flow
+### 2. Repository Operation Flow
 ```mermaid
 sequenceDiagram
     participant C as Client
     participant S as Server
-    participant A as AI
-    participant G as GitHub
-
-    C->>S: StreamLogs(log)
-    S->>S: Check Threshold
-    S->>A: Generate Solution
-    A->>S: Solution
-    alt suggest mode
-        S->>C: Suggested Fix
-    else deploy mode
-        S->>G: Create PR
-        G->>S: PR Details
-        S->>C: PR Information
-    end
+    participant R as Repository
+    participant M as Model
+    participant G as Remote Repository
+    C->>S: Request
+    S->>R: Process
+    R->>M: Analyze
+    M->>R: Generate Changes
+    R->>G: Submit Changes
+    G->>S: Change Request Details
+    S->>C: Response
 ```
 
-## Key Design Decisions
+## Performance Considerations
 
-### 1. gRPC Communication
-- **Why**: Low latency, bidirectional streaming, strong typing
-- **Benefits**:
-  - Real-time log processing
-  - Efficient binary protocol
-  - Language-agnostic API
-  - Built-in flow control
+### 1. Caching Strategy
+- In-memory caching for frequent operations
+- File content caching
+- Reduced remote repository API calls
+- Cache invalidation policies
 
-### 2. Virtual Repository
-- **Why**: Efficient code analysis and context management
-- **Benefits**:
-  - Reduced GitHub API calls
-  - Rich metadata support
-  - Fast solution generation
-  - Language-specific features
-
-### 3. Streaming Architecture
-- **Why**: Real-time processing with backpressure
-- **Benefits**:
-  - No log loss
-  - Resource management
-  - Scalable processing
-  - Failure isolation
-
-### 4. Mode-based Operation
-- **Why**: Flexible deployment options
-- **Benefits**:
-  - Safe testing (suggest mode)
-  - Automated fixes (deploy mode)
-  - Environment-specific configuration
-  - Progressive adoption
-
-## Scalability Considerations
-
-### 1. Horizontal Scaling
-- Multiple server instances
-- Load balancing
-- Session affinity for streams
-- Distributed node management
-
-### 2. Resource Management
-- Buffered channels
+### 2. Concurrency
+- Parallel log processing
+- Concurrent file operations
+- Asynchronous model requests
 - Connection pooling
-- Cache management
+
+### 3. Resource Management
+- Connection limits
+- Request timeouts
 - Rate limiting
+- Resource pooling
 
-### 3. Performance Optimization
-- Metadata caching
-- Incremental updates
-- Batch processing
-- Async operations
+## Reliability
 
-## Security Considerations
+### 1. Fault Tolerance
+- Service redundancy
+- Failure isolation
+- Graceful degradation
+- Retry mechanisms
+
+### 2. Error Handling
+- Comprehensive error types
+- Error propagation
+- Recovery procedures
+- Error reporting
+
+### 3. Monitoring
+- Health checks
+- Performance metrics
+- Error rates
+- Resource utilization
+
+## Security
 
 ### 1. Authentication
-- GitHub token validation
-- AI provider authentication
-- Client authentication
-- Token rotation
+- Token-based authentication
+- Remote repository authentication
+- Model provider authentication
+- Node authentication
 
 ### 2. Authorization
-- Repository access control
+- Role-based access
 - Operation permissions
-- Rate limiting
-- Audit logging
+- Resource access control
+- Token validation
 
 ### 3. Data Protection
-- Token encryption
 - Secure communication
-- Data sanitization
-- Secret management
+- Token encryption
+- Sensitive data handling
+- Audit logging
 
-## Monitoring and Observability
+## Observability
 
-### 1. Metrics
-- Node status
-- Processing latency
-- Success rates
+### 1. Logging
+- Structured logging
+- Log levels
+- Context tracking
+- Log aggregation
+
+### 2. Metrics
+- System metrics
+- Business metrics
+- Custom metrics
+- Metric aggregation
+
+### 3. Tracing
+- Request tracing
+- Operation tracking
+- Performance tracing
+- Error tracing
+
+### 4. Monitoring
+- System health
 - Resource usage
-
-### 2. Logging
-- Operation logs
-- Error tracking
-- Audit trails
-- Performance data
-
-### 3. Alerting
-- Node health
 - Error rates
-- Resource exhaustion
-- API limits
+- Audit trails
 
 ## Future Considerations
 
 ### 1. Extensibility
-- Additional AI providers
-- VCS integrations
-- Language support
-- Custom analyzers
+- Additional providers
+- Custom integrations
+- Plugin system
+- API versioning
 
 ### 2. High Availability
-- Node redundancy
-- State replication
+- Load balancing
+- Service discovery
 - Failure recovery
-- Zero-downtime updates
+- Data replication
 
-### 3. Enterprise Features
-- Multi-repository support
-- Team management
-- Custom rules
-- Compliance features 
+### 3. Scalability
+- Horizontal scaling
+- Vertical scaling
+- Resource optimization
+- Performance tuning 
