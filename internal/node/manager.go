@@ -6,238 +6,130 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/HoyeonS/hephaestus/internal/logger"
 	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
-	"go.uber.org/zap"
 )
 
-// Manager implements the NodeLifecycleManager interface
+// Manager handles node registration and status tracking
 type Manager struct {
-	// Dependencies
-	logProcessor      hephaestus.LogProcessingService
-	modelService      hephaestus.ModelServiceProvider
-	remoteRepoService hephaestus.RemoteRepositoryService
+	nodes             map[string]*hephaestus.SystemNode
+	mu                sync.RWMutex
 	metricsCollector  hephaestus.MetricsCollectionService
-
-	// Node registry
-	nodes     map[string]*hephaestus.SystemNode
-	nodesMutex sync.RWMutex
+	remoteRepoService hephaestus.RepositoryManager
 }
 
-// NewManager creates a new instance of the node manager
-func NewManager(
-	logProcessor hephaestus.LogProcessingService,
-	modelService hephaestus.ModelServiceProvider,
-	remoteRepoService hephaestus.RemoteRepositoryService,
-	metricsCollector hephaestus.MetricsCollectionService,
-) *Manager {
+// NewManager creates a new node manager instance
+func NewManager(metrics hephaestus.MetricsCollectionService, repo hephaestus.RepositoryManager) *Manager {
 	return &Manager{
-		logProcessor:      logProcessor,
-		modelService:      modelService,
-		remoteRepoService: remoteRepoService,
-		metricsCollector:  metricsCollector,
-		nodes:            make(map[string]*hephaestus.SystemNode),
+		nodes:             make(map[string]*hephaestus.SystemNode),
+		metricsCollector:  metrics,
+		remoteRepoService: repo,
 	}
 }
 
-// CreateSystemNode creates a new node with the provided configuration
-func (m *Manager) CreateSystemNode(ctx context.Context, config *hephaestus.SystemConfiguration) (*hephaestus.SystemNode, error) {
-	if config == nil {
-		logger.Error(ctx, "configuration is required")
-		return nil, fmt.Errorf("configuration is required")
+// Initialize sets up the node manager
+func (m *Manager) Initialize(ctx context.Context) error {
+	logger.Info(ctx, "Initializing node manager")
+	
+	if err := m.remoteRepoService.Initialize(ctx); err != nil {
+		logger.Error(ctx, "Failed to initialize remote repository service", logger.Field("error", err))
+		return fmt.Errorf("failed to initialize remote repository service: %v", err)
 	}
 
-	// Validate configuration
-	if err := m.validateConfiguration(config); err != nil {
-		logger.Error(ctx, "invalid configuration", zap.Error(err))
-		return nil, fmt.Errorf("invalid configuration: %v", err)
-	}
-
-	nodeID := uuid.New().String()
-	logger.Info(ctx, "creating new node", zap.String("node_id", nodeID))
-
-	// Initialize remote repository connection
-	if err := m.remoteRepoService.Initialize(ctx, config.RemoteSettings); err != nil {
-		logger.Error(ctx, "failed to initialize remote repository",
-			zap.String("node_id", nodeID),
-			zap.Error(err),
-		)
-		return nil, fmt.Errorf("failed to initialize remote repository: %v", err)
-	}
-
-	// Initialize model service
-	if err := m.modelService.Initialize(ctx, config.ModelSettings); err != nil {
-		logger.Error(ctx, "failed to initialize model service",
-			zap.String("node_id", nodeID),
-			zap.Error(err),
-		)
-		return nil, fmt.Errorf("failed to initialize model service: %v", err)
-	}
-
-	// Create new node
-	node := &hephaestus.SystemNode{
-		NodeIdentifier: nodeID,
-		NodeConfig:     config,
-		CurrentStatus:  hephaestus.NodeStatusInitializing,
-		CreatedAt:      time.Now(),
-		LastActive:     time.Now(),
-	}
-
-	// Store node in registry
-	m.nodesMutex.Lock()
-	m.nodes[node.NodeIdentifier] = node
-	m.nodesMutex.Unlock()
-
-	// Initialize metrics collection
-	if err := m.metricsCollector.InitializeNodeMetrics(ctx, node.NodeIdentifier); err != nil {
-		logger.Error(ctx, "failed to initialize metrics collection",
-			zap.String("node_id", nodeID),
-			zap.Error(err),
-		)
-		return nil, fmt.Errorf("failed to initialize metrics collection: %v", err)
-	}
-
-	// Update node status to operational
-	node.CurrentStatus = hephaestus.NodeStatusOperational
-	logger.Info(ctx, "node created successfully",
-		zap.String("node_id", nodeID),
-		zap.String("status", string(node.CurrentStatus)),
-	)
-
-	return node, nil
+	return nil
 }
 
-// GetSystemNode retrieves a node by its identifier
-func (m *Manager) GetSystemNode(ctx context.Context, nodeID string) (*hephaestus.SystemNode, error) {
-	m.nodesMutex.RLock()
-	node, exists := m.nodes[nodeID]
-	m.nodesMutex.RUnlock()
-
-	if !exists {
-		logger.Warn(ctx, "node not found", zap.String("node_id", nodeID))
-		return nil, fmt.Errorf("node not found: %s", nodeID)
+// RegisterNode registers a new node with the system
+func (m *Manager) RegisterNode(ctx context.Context, node *hephaestus.SystemNode) error {
+	if node == nil {
+		return fmt.Errorf("node cannot be nil")
 	}
 
-	logger.Debug(ctx, "retrieved node",
-		zap.String("node_id", nodeID),
-		zap.String("status", string(node.CurrentStatus)),
-	)
-	return node, nil
-}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-// UpdateNodeOperationalStatus updates the operational status of a node
-func (m *Manager) UpdateNodeOperationalStatus(ctx context.Context, nodeID string, status hephaestus.NodeStatus) error {
-	m.nodesMutex.Lock()
-	defer m.nodesMutex.Unlock()
-
-	node, exists := m.nodes[nodeID]
-	if !exists {
-		logger.Warn(ctx, "node not found", zap.String("node_id", nodeID))
-		return fmt.Errorf("node not found: %s", nodeID)
+	if _, exists := m.nodes[node.NodeID]; exists {
+		return fmt.Errorf("node %s already registered", node.NodeID)
 	}
 
-	// Update status
-	oldStatus := node.CurrentStatus
-	node.CurrentStatus = status
+	node.CreatedAt = time.Now()
 	node.LastActive = time.Now()
+	node.Status = hephaestus.NodeStatusActive
 
-	logger.Info(ctx, "node status updated",
-		zap.String("node_id", nodeID),
-		zap.String("old_status", string(oldStatus)),
-		zap.String("new_status", string(status)),
+	m.nodes[node.NodeID] = node
+	m.metricsCollector.RecordNodeStatus(node.NodeID, string(node.Status))
+
+	logger.Info(ctx, "Node registered successfully", 
+		logger.Field("node_id", node.NodeID),
+		logger.Field("status", string(node.Status)),
 	)
-
-	// Record status change metric
-	if err := m.metricsCollector.RecordNodeStatusChange(ctx, nodeID, string(status)); err != nil {
-		logger.Error(ctx, "failed to record status change metric",
-			zap.String("node_id", nodeID),
-			zap.Error(err),
-		)
-		return fmt.Errorf("failed to record status change metric: %v", err)
-	}
 
 	return nil
 }
 
-// DeleteSystemNode removes a node from the system
-func (m *Manager) DeleteSystemNode(ctx context.Context, nodeID string) error {
-	m.nodesMutex.Lock()
-	defer m.nodesMutex.Unlock()
+// UpdateNodeStatus updates the status of a registered node
+func (m *Manager) UpdateNodeStatus(ctx context.Context, nodeID string, status hephaestus.NodeStatus) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	node, exists := m.nodes[nodeID]
 	if !exists {
-		logger.Warn(ctx, "node not found", zap.String("node_id", nodeID))
-		return fmt.Errorf("node not found: %s", nodeID)
+		return fmt.Errorf("node %s not found", nodeID)
 	}
 
-	logger.Info(ctx, "deleting node", zap.String("node_id", nodeID))
+	node.Status = status
+	node.LastActive = time.Now()
+	m.metricsCollector.RecordNodeStatus(nodeID, string(status))
 
-	// Clean up resources
-	if err := m.cleanupNodeResources(ctx, node); err != nil {
-		logger.Error(ctx, "failed to cleanup node resources",
-			zap.String("node_id", nodeID),
-			zap.Error(err),
-		)
-		return fmt.Errorf("failed to cleanup node resources: %v", err)
+	logger.Info(ctx, "Node status updated",
+		logger.Field("node_id", nodeID),
+		logger.Field("status", string(status)),
+	)
+
+	return nil
+}
+
+// GetNode retrieves information about a registered node
+func (m *Manager) GetNode(ctx context.Context, nodeID string) (*hephaestus.SystemNode, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	node, exists := m.nodes[nodeID]
+	if !exists {
+		return nil, fmt.Errorf("node %s not found", nodeID)
 	}
 
-	// Remove node from registry
+	return node, nil
+}
+
+// ListNodes returns a list of all registered nodes
+func (m *Manager) ListNodes(ctx context.Context) ([]*hephaestus.SystemNode, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	nodes := make([]*hephaestus.SystemNode, 0, len(m.nodes))
+	for _, node := range m.nodes {
+		nodes = append(nodes, node)
+	}
+
+	return nodes, nil
+}
+
+// RemoveNode removes a node from the system
+func (m *Manager) RemoveNode(ctx context.Context, nodeID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.nodes[nodeID]; !exists {
+		return fmt.Errorf("node %s not found", nodeID)
+	}
+
 	delete(m.nodes, nodeID)
-	logger.Info(ctx, "node deleted successfully", zap.String("node_id", nodeID))
+	m.metricsCollector.RecordNodeStatus(nodeID, string(hephaestus.NodeStatusRemoved))
 
-	return nil
-}
-
-// Helper functions
-
-func (m *Manager) validateConfiguration(config *hephaestus.SystemConfiguration) error {
-	if config.RemoteSettings.AuthToken == "" {
-		return fmt.Errorf("remote repository auth token is required")
-	}
-
-	if config.ModelSettings.ServiceAPIKey == "" {
-		return fmt.Errorf("model service API key is required")
-	}
-
-	if config.LoggingSettings.LogLevel == "" {
-		return fmt.Errorf("log level is required")
-	}
-
-	if config.OperationalMode == "" {
-		return fmt.Errorf("operational mode is required")
-	}
-
-	return nil
-}
-
-func (m *Manager) cleanupNodeResources(ctx context.Context, node *hephaestus.SystemNode) error {
-	// Clean up remote repository resources
-	if err := m.remoteRepoService.Cleanup(ctx, node.NodeIdentifier); err != nil {
-		logger.Error(ctx, "failed to cleanup remote repository resources",
-			zap.String("node_id", node.NodeIdentifier),
-			zap.Error(err),
-		)
-		return fmt.Errorf("failed to cleanup remote repository resources: %v", err)
-	}
-
-	// Clean up model service resources
-	if err := m.modelService.Cleanup(ctx, node.NodeIdentifier); err != nil {
-		logger.Error(ctx, "failed to cleanup model service resources",
-			zap.String("node_id", node.NodeIdentifier),
-			zap.Error(err),
-		)
-		return fmt.Errorf("failed to cleanup model service resources: %v", err)
-	}
-
-	// Clean up metrics collection
-	if err := m.metricsCollector.CleanupNodeMetrics(ctx, node.NodeIdentifier); err != nil {
-		logger.Error(ctx, "failed to cleanup metrics collection",
-			zap.String("node_id", node.NodeIdentifier),
-			zap.Error(err),
-		)
-		return fmt.Errorf("failed to cleanup metrics collection: %v", err)
-	}
+	logger.Info(ctx, "Node removed successfully",
+		logger.Field("node_id", nodeID),
+	)
 
 	return nil
 } 
