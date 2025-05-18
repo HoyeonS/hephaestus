@@ -373,9 +373,9 @@ func TestStatusToValue(t *testing.T) {
 }
 
 func TestCollector(t *testing.T) {
-	// Create a new registry for testing
-	registry := prometheus.NewRegistry()
-	collector := NewCollector(registry)
+	// Create a new collector
+	collector := NewCollector()
+	require.NoError(t, collector.Initialize(context.Background()))
 
 	t.Run("initialize node metrics", func(t *testing.T) {
 		err := collector.InitializeNodeMetrics(context.Background(), "test-node")
@@ -388,17 +388,23 @@ func TestCollector(t *testing.T) {
 	})
 
 	t.Run("record model latency", func(t *testing.T) {
-		err := collector.RecordModelLatency(context.Background(), "test-node", time.Second)
+		err := collector.RecordModelLatency(context.Background(), "test-node", "generate_solution", time.Second)
 		assert.NoError(t, err)
 	})
 
 	t.Run("record repository error", func(t *testing.T) {
-		err := collector.RecordRepositoryError(context.Background(), "test-node", "create_issue")
+		err := collector.RecordRepositoryError(context.Background(), "test-node", "create_issue", "permission_denied")
 		assert.NoError(t, err)
 	})
 
 	t.Run("cleanup node metrics", func(t *testing.T) {
 		err := collector.CleanupNodeMetrics(context.Background(), "test-node")
 		assert.NoError(t, err)
+	})
+
+	t.Run("get current metrics", func(t *testing.T) {
+		metrics := collector.GetCurrentMetrics()
+		assert.NotNil(t, metrics)
+		assert.IsType(t, map[string]interface{}{}, metrics)
 	})
 } 

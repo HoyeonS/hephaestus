@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -56,7 +55,7 @@ func TestInitialize(t *testing.T) {
 			name: "with output paths",
 			config: Config{
 				Level:       "info",
-				Format:     "json",
+				Format:      "json",
 				OutputPaths: []string{"stdout", "stderr", "test.log"},
 			},
 			wantErr: false,
@@ -182,14 +181,19 @@ func TestSync(t *testing.T) {
 }
 
 func TestLogging(t *testing.T) {
-	// Create temporary log file
+	// Create temporary log directory
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "test.log")
+
+	// Create parent directory if it doesn't exist
+	if err := os.MkdirAll(filepath.Dir(logFile), 0755); err != nil {
+		t.Fatalf("Failed to create log directory: %v", err)
+	}
 
 	// Initialize logger with file output
 	err := Initialize(Config{
 		Level:       "debug",
-		Format:     "json",
+		Format:      "json",
 		OutputPaths: []string{logFile},
 	})
 	require.NoError(t, err)
@@ -220,24 +224,24 @@ func TestLogging(t *testing.T) {
 
 func TestGetTraceID(t *testing.T) {
 	tests := []struct {
-		name    string
-		ctx     context.Context
-		want    string
+		name string
+		ctx  context.Context
+		want string
 	}{
 		{
-			name:    "context with trace ID",
-			ctx:     context.WithValue(context.Background(), "trace_id", "test-trace-id"),
-			want:    "test-trace-id",
+			name: "context with trace ID",
+			ctx:  context.WithValue(context.Background(), "trace_id", "test-trace-id"),
+			want: "test-trace-id",
 		},
 		{
-			name:    "context without trace ID",
-			ctx:     context.Background(),
-			want:    "",
+			name: "context without trace ID",
+			ctx:  context.Background(),
+			want: "",
 		},
 		{
-			name:    "nil context",
-			ctx:     nil,
-			want:    "",
+			name: "nil context",
+			ctx:  nil,
+			want: "",
 		},
 	}
 
@@ -247,4 +251,4 @@ func TestGetTraceID(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
-} 
+}

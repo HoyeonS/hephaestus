@@ -141,11 +141,13 @@ func TestProcessLogs(t *testing.T) {
 		
 		assert.NoError(t, err)
 		stream := processor.streams[nodeID]
-		assert.Contains(t, stream.Buffer, LogEntry{
-			Message: "plain text log",
-			Level:   "info",
-			Context: map[string]interface{}{},
-		})
+		// Get the last entry since we know it's the text log we just added
+		lastEntry := stream.Buffer[len(stream.Buffer)-1]
+		assert.Equal(t, "plain text log", lastEntry.Message)
+		assert.Equal(t, "info", lastEntry.Level)
+		assert.Empty(t, lastEntry.Context)
+		assert.WithinDuration(t, time.Now(), lastEntry.Timestamp, time.Second)
+		assert.WithinDuration(t, time.Now(), lastEntry.ProcessedAt, time.Second)
 	})
 
 	t.Run("Process logs with non-existent stream", func(t *testing.T) {

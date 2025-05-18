@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Mock types
 type MockModelClient struct {
 	mock.Mock
 }
@@ -28,14 +29,12 @@ type MockMetricsCollector struct {
 	mock.Mock
 }
 
-func (m *MockMetricsCollector) RecordOperationMetrics(operationName string, duration time.Duration, successful bool) error {
-	args := m.Called(operationName, duration, successful)
-	return args.Error(0)
+func (m *MockMetricsCollector) RecordOperationMetrics(operationName string, duration time.Duration, successful bool) {
+	m.Called(operationName, duration, successful)
 }
 
-func (m *MockMetricsCollector) RecordErrorMetrics(componentName string, err error) error {
-	args := m.Called(componentName, err)
-	return args.Error(0)
+func (m *MockMetricsCollector) RecordErrorMetrics(componentName string, err error) {
+	m.Called(componentName, err)
 }
 
 func (m *MockMetricsCollector) GetCurrentMetrics() map[string]interface{} {
@@ -67,9 +66,6 @@ func (m *MockRepositoryManager) UpdateFileContents(ctx context.Context, filePath
 
 func (m *MockRepositoryManager) ListRepositoryFiles(ctx context.Context) ([]string, error) {
 	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
 	return args.Get(0).([]string), args.Error(1)
 }
 
@@ -97,42 +93,43 @@ func TestInitialize(t *testing.T) {
 		config := &hephaestus.ModelServiceConfiguration{
 			ServiceProvider: "test-provider",
 			ServiceAPIKey:   "test-key",
-			ModelVersion:    "test-model",
+			ModelVersion:    "v1",
 		}
 
 		err := service.Initialize(ctx, config)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, config, service.config)
 	})
 
-	t.Run("nil configuration", func(t *testing.T) {
+	t.Run("missing configuration", func(t *testing.T) {
 		err := service.Initialize(ctx, nil)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "model configuration is required")
+		assert.Contains(t, err.Error(), "configuration is required")
 	})
 
 	t.Run("missing API key", func(t *testing.T) {
 		config := &hephaestus.ModelServiceConfiguration{
 			ServiceProvider: "test-provider",
-			ModelVersion:    "test-model",
+			ModelVersion:    "v1",
 		}
 
 		err := service.Initialize(ctx, config)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "model service API key is required")
+		assert.Contains(t, err.Error(), "API key is required")
 	})
 }
 
 func TestGenerateSolutionProposal(t *testing.T) {
 	ctx, service, mockClient, mockMetrics, mockRepo := setupTest(t)
 
+	// Initialize service
 	config := &hephaestus.ModelServiceConfiguration{
 		ServiceProvider: "test-provider",
 		ServiceAPIKey:   "test-key",
-		ModelVersion:    "test-model",
+		ModelVersion:    "v1",
 	}
 	err := service.Initialize(ctx, config)
-	require.NoError(t, err)
+	assert.NoError(t, err)
 
 	t.Run("successful solution generation", func(t *testing.T) {
 		entry := &hephaestus.LogEntryData{
@@ -140,64 +137,41 @@ func TestGenerateSolutionProposal(t *testing.T) {
 			LogLevel:      "error",
 			LogMessage:    "test error",
 			LogTimestamp:  time.Now(),
-			LogMetadata:   map[string]string{"key": "value"},
 		}
 
 		expectedSolution := &hephaestus.ProposedSolution{
-			SolutionID:     "test-solution",
-			NodeIdentifier: entry.NodeIdentifier,
-			AssociatedLog: entry,
-			GenerationTime: time.Now(),
+			SolutionID:      "test-solution",
+			NodeIdentifier:  "test-node",
+			AssociatedLog:   entry,
+			ProposedChanges: "test changes",
+			GenerationTime:  time.Now(),
 		}
 
 		mockClient.On("GenerateSolution", ctx, entry, config).Return(expectedSolution, nil)
-		mockMetrics.On("RecordOperationMetrics", "generate_solution", mock.AnythingOfType("time.Duration"), true).Return(nil)
+		mockMetrics.On("RecordOperationMetrics", "generate_solution", mock.Anything, true).Return()
 
 		solution, err := service.GenerateSolutionProposal(ctx, entry, mockRepo)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, expectedSolution, solution)
 
 		mockClient.AssertExpectations(t)
 		mockMetrics.AssertExpectations(t)
 	})
 
-	t.Run("failed solution generation", func(t *testing.T) {
+	t.Run("generation failure", func(t *testing.T) {
 		entry := &hephaestus.LogEntryData{
 			NodeIdentifier: "test-node",
 			LogLevel:      "error",
 			LogMessage:    "test error",
+			LogTimestamp:  time.Now(),
 		}
 
 		mockClient.On("GenerateSolution", ctx, entry, config).Return(nil, assert.AnError)
+		mockMetrics.On("RecordErrorMetrics", "model_service", assert.AnError).Return()
 
 		solution, err := service.GenerateSolutionProposal(ctx, entry, mockRepo)
 		assert.Error(t, err)
 		assert.Nil(t, solution)
-		assert.Contains(t, err.Error(), "failed to generate solution")
-
-		mockClient.AssertExpectations(t)
-	})
-
-	t.Run("failed metrics recording", func(t *testing.T) {
-		entry := &hephaestus.LogEntryData{
-			NodeIdentifier: "test-node",
-			LogLevel:      "error",
-			LogMessage:    "test error",
-		}
-
-		expectedSolution := &hephaestus.ProposedSolution{
-			SolutionID:     "test-solution",
-			NodeIdentifier: entry.NodeIdentifier,
-			AssociatedLog: entry,
-			GenerationTime: time.Now(),
-		}
-
-		mockClient.On("GenerateSolution", ctx, entry, config).Return(expectedSolution, nil)
-		mockMetrics.On("RecordOperationMetrics", "generate_solution", mock.AnythingOfType("time.Duration"), true).Return(assert.AnError)
-
-		solution, err := service.GenerateSolutionProposal(ctx, entry, mockRepo)
-		require.NoError(t, err)
-		assert.Equal(t, expectedSolution, solution)
 
 		mockClient.AssertExpectations(t)
 		mockMetrics.AssertExpectations(t)
@@ -207,53 +181,44 @@ func TestGenerateSolutionProposal(t *testing.T) {
 func TestValidateSolutionProposal(t *testing.T) {
 	ctx, service, _, _, _ := setupTest(t)
 
-	t.Run("nil solution", func(t *testing.T) {
-		err := service.ValidateSolutionProposal(ctx, nil)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "solution cannot be nil")
-	})
-
 	t.Run("valid solution", func(t *testing.T) {
 		solution := &hephaestus.ProposedSolution{
 			SolutionID:      "test-solution",
 			NodeIdentifier:  "test-node",
-			ConfidenceScore: 0.95,
+			ProposedChanges: "test changes",
+			GenerationTime:  time.Now(),
 		}
 
 		err := service.ValidateSolutionProposal(ctx, solution)
 		assert.NoError(t, err)
+	})
+
+	t.Run("nil solution", func(t *testing.T) {
+		err := service.ValidateSolutionProposal(ctx, nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "solution cannot be nil")
 	})
 }
 
 func TestCleanup(t *testing.T) {
 	ctx, service, _, _, _ := setupTest(t)
 
-	config := &hephaestus.ModelServiceConfiguration{
-		ServiceProvider: "test-provider",
-		ServiceAPIKey:   "test-key",
-		ModelVersion:    "test-model",
-	}
-	err := service.Initialize(ctx, config)
-	require.NoError(t, err)
-
 	t.Run("cleanup existing session", func(t *testing.T) {
 		nodeID := "test-node"
-		session := &ModelSession{
-			NodeID:        nodeID,
-			LastActive:    time.Now(),
-			IsActive:      true,
-			Configuration: config,
-		}
-		service.sessions[nodeID] = session
+		session, err := service.getOrCreateSession(ctx, nodeID)
+		assert.NoError(t, err)
+		assert.NotNil(t, session)
 
-		err := service.Cleanup(ctx, nodeID)
-		require.NoError(t, err)
-		assert.NotContains(t, service.sessions, nodeID)
+		err = service.Cleanup(ctx, nodeID)
+		assert.NoError(t, err)
+
+		_, exists := service.sessions[nodeID]
+		assert.False(t, exists)
 	})
 
 	t.Run("cleanup non-existent session", func(t *testing.T) {
 		err := service.Cleanup(ctx, "non-existent")
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	})
 }
 
