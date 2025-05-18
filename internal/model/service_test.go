@@ -26,6 +26,11 @@ type MockMetricsCollector struct {
 	mock.Mock
 }
 
+// RecordNodeStatus implements hephaestus.MetricsCollectionService.
+func (m *MockMetricsCollector) RecordNodeStatus(nodeID string, status string) {
+	panic("unimplemented")
+}
+
 func (m *MockMetricsCollector) RecordOperationMetrics(operationName string, duration time.Duration, successful bool) {
 	m.Called(operationName, duration, successful)
 }
@@ -61,9 +66,8 @@ func (m *MockRepositoryManager) ListRepositoryFiles(ctx context.Context) ([]stri
 func setupTest(t *testing.T) (*Service, *MockModelClient, *MockMetricsCollector, *MockRepositoryManager, context.Context) {
 	// Initialize logger
 	err := logger.Initialize(&logger.Config{
-		Level:  "debug",
-		Format: "json",
-		Output: "",
+		Level:      "debug",
+		OutputPath: "",
 	})
 	require.NoError(t, err)
 
@@ -86,11 +90,10 @@ func TestGenerateSolutionProposal(t *testing.T) {
 	t.Run("successful generation", func(t *testing.T) {
 		logEntry := &hephaestus.LogEntryData{
 			NodeIdentifier: "test-node",
-			LogLevel:      "error",
-			LogMessage:    "test error",
-			LogTimestamp:  time.Now(),
-			LogMetadata:   map[string]string{"key": "value"},
-			ErrorTrace:    "test stack trace",
+			LogLevel:       "error",
+			LogMessage:     "test error",
+			Timestamp:      time.Now(),
+			ErrorTrace:     "test stack trace",
 		}
 
 		mockClient.On("GenerateSolution", mock.Anything, mock.Anything).Return("test solution", nil)
@@ -108,8 +111,8 @@ func TestGenerateSolutionProposal(t *testing.T) {
 	t.Run("failed generation", func(t *testing.T) {
 		logEntry := &hephaestus.LogEntryData{
 			NodeIdentifier: "test-node",
-			LogLevel:      "error",
-			LogMessage:    "test error",
+			LogLevel:       "error",
+			LogMessage:     "test error",
 		}
 
 		mockClient.On("GenerateSolution", mock.Anything, mock.Anything).Return("", assert.AnError)
@@ -128,11 +131,11 @@ func TestValidateSolutionProposal(t *testing.T) {
 	// Test successful validation
 	t.Run("successful validation", func(t *testing.T) {
 		solution := &hephaestus.ProposedSolution{
-			SolutionID:     "test-solution",
-			NodeIdentifier: "test-node",
+			SolutionID:      "test-solution",
+			NodeIdentifier:  "test-node",
 			ProposedChanges: "test changes",
-			AffectedFiles:  []string{"test.go"},
-			GenerationTime: time.Now(),
+			AffectedFiles:   []string{"test.go"},
+			GenerationTime:  time.Now(),
 		}
 
 		mockClient.On("GenerateSolution", mock.Anything, mock.Anything).Return("valid", nil)
@@ -145,8 +148,8 @@ func TestValidateSolutionProposal(t *testing.T) {
 	// Test failed validation
 	t.Run("failed validation", func(t *testing.T) {
 		solution := &hephaestus.ProposedSolution{
-			SolutionID:     "test-solution",
-			NodeIdentifier: "test-node",
+			SolutionID:      "test-solution",
+			NodeIdentifier:  "test-node",
 			ProposedChanges: "test changes",
 		}
 
@@ -227,7 +230,7 @@ func TestCreateSession(t *testing.T) {
 
 	t.Run("Successful session creation", func(t *testing.T) {
 		err := service.CreateSession(ctx, nodeID)
-		
+
 		assert.NoError(t, err)
 		session, exists := service.sessions[nodeID]
 		assert.True(t, exists)
@@ -240,7 +243,7 @@ func TestCreateSession(t *testing.T) {
 
 	t.Run("Session already exists", func(t *testing.T) {
 		err := service.CreateSession(ctx, nodeID)
-		
+
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "session already exists for node")
 	})
@@ -260,7 +263,7 @@ func TestGetSession(t *testing.T) {
 		}
 
 		session, err := service.GetSession(ctx, nodeID)
-		
+
 		assert.NoError(t, err)
 		assert.NotNil(t, session)
 		assert.Equal(t, nodeID, session.NodeID)
@@ -269,7 +272,7 @@ func TestGetSession(t *testing.T) {
 
 	t.Run("Get non-existent session", func(t *testing.T) {
 		session, err := service.GetSession(ctx, "non-existent")
-		
+
 		assert.Error(t, err)
 		assert.Nil(t, session)
 		assert.Contains(t, err.Error(), "session not found for node")
@@ -279,7 +282,7 @@ func TestGetSession(t *testing.T) {
 		service.sessions[nodeID].IsActive = false
 
 		session, err := service.GetSession(ctx, nodeID)
-		
+
 		assert.Error(t, err)
 		assert.Nil(t, session)
 		assert.Contains(t, err.Error(), "session is not active for node")
@@ -322,4 +325,4 @@ func TestValidateModelVersion(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "unsupported model provider")
 	})
-} 
+}
