@@ -88,7 +88,10 @@ func Debug(ctx context.Context, msg string, fields ...zap.Field) {
 	if globalLogger == nil {
 		return
 	}
-	globalLogger.Debug(msg, append(fields, extractTraceID(ctx)...)...)
+	if traceField := extractTraceID(ctx); traceField != nil {
+		fields = append(fields, *traceField)
+	}
+	globalLogger.Debug(msg, fields...)
 }
 
 // Info logs a message at info level
@@ -96,7 +99,10 @@ func Info(ctx context.Context, msg string, fields ...zap.Field) {
 	if globalLogger == nil {
 		return
 	}
-	globalLogger.Info(msg, append(fields, extractTraceID(ctx)...)...)
+	if traceField := extractTraceID(ctx); traceField != nil {
+		fields = append(fields, *traceField)
+	}
+	globalLogger.Info(msg, fields...)
 }
 
 // Warn logs a message at warn level
@@ -104,7 +110,10 @@ func Warn(ctx context.Context, msg string, fields ...zap.Field) {
 	if globalLogger == nil {
 		return
 	}
-	globalLogger.Warn(msg, append(fields, extractTraceID(ctx)...)...)
+	if traceField := extractTraceID(ctx); traceField != nil {
+		fields = append(fields, *traceField)
+	}
+	globalLogger.Warn(msg, fields...)
 }
 
 // Error logs a message at error level
@@ -112,7 +121,10 @@ func Error(ctx context.Context, msg string, fields ...zap.Field) {
 	if globalLogger == nil {
 		return
 	}
-	globalLogger.Error(msg, append(fields, extractTraceID(ctx)...)...)
+	if traceField := extractTraceID(ctx); traceField != nil {
+		fields = append(fields, *traceField)
+	}
+	globalLogger.Error(msg, fields...)
 }
 
 // WithContext returns a logger with context fields
@@ -120,7 +132,10 @@ func WithContext(ctx context.Context) *zap.Logger {
 	if globalLogger == nil {
 		return nil
 	}
-	return globalLogger.With(extractTraceID(ctx))
+	if traceField := extractTraceID(ctx); traceField != nil {
+		return globalLogger.With(*traceField)
+	}
+	return globalLogger
 }
 
 // Sync flushes any buffered log entries
@@ -134,9 +149,10 @@ func Sync() error {
 // Helper functions
 
 // extractTraceID extracts the trace ID from the context
-func extractTraceID(ctx context.Context) []zap.Field {
+func extractTraceID(ctx context.Context) *zap.Field {
 	if traceID := ctx.Value("trace_id"); traceID != nil {
-		return []zap.Field{zap.String("trace_id", fmt.Sprintf("%v", traceID))}
+		field := zap.String("trace_id", fmt.Sprintf("%v", traceID))
+		return &field
 	}
 	return nil
 } 
