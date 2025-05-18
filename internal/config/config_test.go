@@ -318,4 +318,163 @@ func TestConfigFilePath(t *testing.T) {
 
 		assert.Equal(t, customPath, GetConfigFilePath())
 	})
+}
+
+func TestLoadConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		expected *hephaestus.Config
+		wantErr  bool
+	}{
+		{
+			name: "valid config",
+			path: "testdata/valid_config.yaml",
+			expected: &hephaestus.Config{
+				LogLevel:   "info",
+				LogOutput:  "stdout",
+				NodeID:     "test-node",
+				Repository: &hephaestus.RepositoryConfig{
+					Owner:     "HoyeonS",
+					Name:      "hephaestus",
+					Token:     "test-token",
+					BasePath:  "/base/path",
+					Branch:    "main",
+				},
+				Model: &hephaestus.ModelConfig{
+					Version:  "v1",
+					APIKey:   "test-key",
+					BaseURL:  "https://api.example.com",
+					Timeout:  30,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:     "invalid path",
+			path:     "testdata/nonexistent.yaml",
+			expected: nil,
+			wantErr:  true,
+		},
+		{
+			name:     "invalid yaml",
+			path:     "testdata/invalid_config.yaml",
+			expected: nil,
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := LoadConfig(tt.path)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, got)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.NotNil(t, got)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+func TestValidateConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *hephaestus.Config
+		wantErr bool
+	}{
+		{
+			name: "valid config",
+			config: &hephaestus.Config{
+				LogLevel:   "info",
+				LogOutput:  "stdout",
+				NodeID:     "test-node",
+				Repository: &hephaestus.RepositoryConfig{
+					Owner:     "HoyeonS",
+					Name:      "hephaestus",
+					Token:     "test-token",
+					BasePath:  "/base/path",
+					Branch:    "main",
+				},
+				Model: &hephaestus.ModelConfig{
+					Version:  "v1",
+					APIKey:   "test-key",
+					BaseURL:  "https://api.example.com",
+					Timeout:  30,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "nil config",
+			config:  nil,
+			wantErr: true,
+		},
+		{
+			name: "missing log level",
+			config: &hephaestus.Config{
+				LogOutput:  "stdout",
+				NodeID:     "test-node",
+				Repository: &hephaestus.RepositoryConfig{
+					Owner:     "HoyeonS",
+					Name:      "hephaestus",
+					Token:     "test-token",
+					BasePath:  "/base/path",
+					Branch:    "main",
+				},
+				Model: &hephaestus.ModelConfig{
+					Version:  "v1",
+					APIKey:   "test-key",
+					BaseURL:  "https://api.example.com",
+					Timeout:  30,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing repository config",
+			config: &hephaestus.Config{
+				LogLevel:  "info",
+				LogOutput: "stdout",
+				NodeID:    "test-node",
+				Model: &hephaestus.ModelConfig{
+					Version:  "v1",
+					APIKey:   "test-key",
+					BaseURL:  "https://api.example.com",
+					Timeout:  30,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing model config",
+			config: &hephaestus.Config{
+				LogLevel:  "info",
+				LogOutput: "stdout",
+				NodeID:    "test-node",
+				Repository: &hephaestus.RepositoryConfig{
+					Owner:     "HoyeonS",
+					Name:      "hephaestus",
+					Token:     "test-token",
+					BasePath:  "/base/path",
+					Branch:    "main",
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateConfig(tt.config)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
 } 

@@ -194,3 +194,97 @@ func validateSystemConfiguration(config *hephaestus.SystemConfiguration) error {
 
 	return nil
 }
+
+// LoadConfig loads the configuration from a YAML file
+func LoadConfig(path string) (*hephaestus.Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %v", err)
+	}
+
+	var config hephaestus.Config
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %v", err)
+	}
+
+	if err := ValidateConfig(&config); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %v", err)
+	}
+
+	return &config, nil
+}
+
+// ValidateConfig validates the configuration
+func ValidateConfig(config *hephaestus.Config) error {
+	if config == nil {
+		return fmt.Errorf("config cannot be nil")
+	}
+
+	if config.LogLevel == "" {
+		return fmt.Errorf("log level is required")
+	}
+
+	if config.NodeID == "" {
+		return fmt.Errorf("node ID is required")
+	}
+
+	if err := validateRepositoryConfig(config.Repository); err != nil {
+		return fmt.Errorf("invalid repository configuration: %v", err)
+	}
+
+	if err := validateModelConfig(config.Model); err != nil {
+		return fmt.Errorf("invalid model configuration: %v", err)
+	}
+
+	return nil
+}
+
+// validateRepositoryConfig validates the repository configuration
+func validateRepositoryConfig(config *hephaestus.RepositoryConfig) error {
+	if config == nil {
+		return fmt.Errorf("repository configuration is required")
+	}
+
+	if config.Owner == "" {
+		return fmt.Errorf("repository owner is required")
+	}
+
+	if config.Name == "" {
+		return fmt.Errorf("repository name is required")
+	}
+
+	if config.Token == "" {
+		return fmt.Errorf("repository token is required")
+	}
+
+	if config.Branch == "" {
+		return fmt.Errorf("repository branch is required")
+	}
+
+	return nil
+}
+
+// validateModelConfig validates the model configuration
+func validateModelConfig(config *hephaestus.ModelConfig) error {
+	if config == nil {
+		return fmt.Errorf("model configuration is required")
+	}
+
+	if config.Version == "" {
+		return fmt.Errorf("model version is required")
+	}
+
+	if config.APIKey == "" {
+		return fmt.Errorf("model API key is required")
+	}
+
+	if config.BaseURL == "" {
+		return fmt.Errorf("model base URL is required")
+	}
+
+	if config.Timeout <= 0 {
+		return fmt.Errorf("model timeout must be greater than 0")
+	}
+
+	return nil
+}
