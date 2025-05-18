@@ -2,12 +2,14 @@ syntax = "proto3";
 
 package hephaestus;
 
-option go_package = "github.com/HoyeonS/hephaestus/pkg/proto";
+option go_package = "github.com/HoyeonS/hephaestus/proto";
+
+import "google/protobuf/timestamp.proto";
 
 // HephaestusService provides the main API interface for the Hephaestus system
 service HephaestusService {
     // Node Management
-    rpc InitializeNode(InitializeNodeRequest) returns (InitializeNodeResponse);
+    rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
     rpc GetNodeStatus(NodeStatusRequest) returns (NodeStatusResponse);
     rpc UpdateNodeConfiguration(UpdateNodeConfigurationRequest) returns (UpdateNodeConfigurationResponse);
     rpc DeleteNode(DeleteNodeRequest) returns (DeleteNodeResponse);
@@ -17,8 +19,8 @@ service HephaestusService {
     rpc StreamLogEntries(StreamLogEntriesRequest) returns (stream LogEntryData);
 
     // Solution Management
-    rpc GetSolutionProposal(SolutionProposalRequest) returns (SolutionProposalResponse);
-    rpc ApplySolution(ApplySolutionRequest) returns (ApplySolutionResponse);
+    rpc GetSolutionProposal(GetSolutionProposalRequest) returns (GetSolutionProposalResponse);
+    rpc ValidateSolution(ValidateSolutionRequest) returns (ValidateSolutionResponse);
 }
 
 // Configuration Messages
@@ -55,14 +57,15 @@ message RepositoryConfiguration {
 }
 
 // Node Management Messages
-message InitializeNodeRequest {
-    SystemConfiguration configuration = 1;
+message RegisterNodeRequest {
+    string node_id = 1;
+    string log_level = 2;
+    string log_output = 3;
 }
 
-message InitializeNodeResponse {
-    string node_identifier = 1;
-    string operational_status = 2;
-    string status_message = 3;
+message RegisterNodeResponse {
+    string status = 1;
+    string error = 2;
 }
 
 message NodeStatusRequest {
@@ -107,14 +110,12 @@ message LogEntryData {
 }
 
 message ProcessLogEntryRequest {
-    string node_identifier = 1;
-    LogEntryData log_entry = 2;
+    LogEntryData log_entry = 1;
 }
 
 message ProcessLogEntryResponse {
-    string entry_identifier = 1;
-    string status_message = 2;
-    bool success = 3;
+    string status = 1;
+    string error = 2;
 }
 
 message StreamLogEntriesRequest {
@@ -123,25 +124,30 @@ message StreamLogEntriesRequest {
 }
 
 // Solution Management Messages
-message SolutionProposalRequest {
-    string node_identifier = 1;
-    string log_entry_identifier = 2;
+message GetSolutionProposalRequest {
+    string node_id = 1;
+    LogEntryData log_entry = 2;
 }
 
-message SolutionProposalResponse {
-    string solution_identifier = 1;
-    string proposed_changes = 2;
-    repeated string affected_files = 3;
-    double confidence_score = 4;
+message SolutionProposal {
+    string solution_id = 1;
+    string node_id = 2;
+    LogEntryData associated_log = 3;
+    string proposed_changes = 4;
+    google.protobuf.Timestamp generation_time = 5;
+    double confidence_score = 6;
 }
 
-message ApplySolutionRequest {
-    string node_identifier = 1;
-    string solution_identifier = 2;
+message GetSolutionProposalResponse {
+    SolutionProposal solution = 1;
+    string error = 2;
 }
 
-message ApplySolutionResponse {
-    string status_message = 1;
-    bool success = 2;
-    repeated string modified_files = 3;
+message ValidateSolutionRequest {
+    SolutionProposal solution = 1;
+}
+
+message ValidateSolutionResponse {
+    bool is_valid = 1;
+    string error = 2;
 } 

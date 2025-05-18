@@ -47,6 +47,7 @@ clean: ## Clean build files
 	rm -f $(BINARY_NAME)
 	rm -f $(COVERAGE_FILE)
 	rm -f $(COVERAGE_HTML)
+	rm -f proto/*.pb.go
 
 test: unit-test integration-test ## Run all tests
 
@@ -75,10 +76,9 @@ deps: ## Download dependencies
 	$(GOMOD) verify
 
 proto: ## Generate Protocol Buffer code
-	mkdir -p $(PROTO_GO_OUT)
-	$(PROTOC) --go_out=$(PROTO_GO_OUT) --go_opt=paths=source_relative \
-		--go-grpc_out=$(PROTO_GO_OUT) --go-grpc_opt=paths=source_relative \
-		$(PROTO_DIR)/*.proto
+	$(PROTOC) --go_out=. --go_opt=paths=source_relative \
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		proto/hephaestus.proto
 
 docker-build: test ## Build Docker image
 	$(DOCKER) build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
