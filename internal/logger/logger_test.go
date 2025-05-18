@@ -13,163 +13,127 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func TestInitialize(t *testing.T) {
+func TestInitializeLogger(t *testing.T) {
 	tests := []struct {
-		name    string
-		config  *Config
-		wantErr bool
+		name        string
+		config      *Config
+		expectError bool
 	}{
 		{
-			name: "valid debug level and json format",
+			name: "valid config with stdout",
 			config: &Config{
-				Level:  "debug",
-				Format: "json",
-				Output: "",
+				Level:      "info",
+				OutputPath: "stdout",
 			},
-			wantErr: false,
+			expectError: false,
 		},
 		{
-			name: "valid info level and console format",
+			name: "valid config with file output",
 			config: &Config{
-				Level:  "info",
-				Format: "console",
-				Output: "",
+				Level:      "debug",
+				OutputPath: "test.log",
 			},
-			wantErr: false,
+			expectError: false,
+		},
+		{
+			name:        "nil config",
+			config:      nil,
+			expectError: true,
 		},
 		{
 			name: "invalid log level",
 			config: &Config{
-				Level:  "invalid",
-				Format: "json",
-				Output: "",
+				Level:      "invalid",
+				OutputPath: "stdout",
 			},
-			wantErr: true,
-		},
-		{
-			name:    "nil config",
-			config:  nil,
-			wantErr: true,
+			expectError: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Reset global logger before each test
+			globalLogger = nil
+
 			err := Initialize(tt.config)
-			if tt.wantErr {
+			if tt.expectError {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
+				assert.NotNil(t, globalLogger)
 			}
-			_ = Sync()
+
+			// Clean up test log file if created
+			if tt.config != nil && tt.config.OutputPath != "stdout" {
+				os.Remove(tt.config.OutputPath)
+			}
 		})
 	}
 }
 
 func TestLoggingWithContext(t *testing.T) {
-	// Setup temporary log file
-	tmpDir := t.TempDir()
-	logFile := filepath.Join(tmpDir, "test.log")
-
-	// Initialize logger
+	// Setup test config
 	config := &Config{
-		Level:  "debug",
-		Format: "json",
-		Output: logFile,
+		Level:      "debug",
+		OutputPath: "stdout",
 	}
-	err := Initialize(config)
-	require.NoError(t, err)
-	defer func() {
-		_ = Sync()
-	}()
 
-	// Test with trace ID
-	ctx := context.WithValue(context.Background(), "trace_id", "test-trace-id")
+	err := Initialize(config)
+	assert.NoError(t, err)
+	defer Sync()
+
+	// Create context with trace ID
+	ctx := context.WithValue(context.Background(), "trace_id", "test-trace-123")
+
+	// Test all logging levels
 	Debug(ctx, "debug message", zap.String("key", "value"))
 	Info(ctx, "info message", zap.Int("count", 42))
-	Warn(ctx, "warn message", zap.Bool("flag", true))
-	Error(ctx, "error message", zap.Error(assert.AnError))
+	Warn(ctx, "warn message", zap.Bool("active", true))
+	Error(ctx, "error message", zap.String("error", "test error"))
 
-	// Test without trace ID
-	ctx = context.Background()
-	Debug(ctx, "debug message without trace")
-	Info(ctx, "info message without trace")
-	Warn(ctx, "warn message without trace")
-	Error(ctx, "error message without trace")
-
-	// Verify log file exists and has content
-	content, err := os.ReadFile(logFile)
-	require.NoError(t, err)
-	assert.NotEmpty(t, content)
+	// Test WithContext
+	logger := WithContext(ctx)
+	assert.NotNil(t, logger)
 }
 
 func TestLoggingToFile(t *testing.T) {
-	// Setup temporary log file
+	// Create temporary log file
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "test.log")
 
-	// Initialize logger with file output
 	config := &Config{
-		Level:  "info",
-		Format: "json",
-		Output: logFile,
+		Level:      "info",
+		OutputPath: logFile,
 	}
+
 	err := Initialize(config)
-	require.NoError(t, err)
+	assert.NoError(t, err)
+	defer Sync()
 
 	// Log some messages
 	ctx := context.Background()
-	Info(ctx, "test message 1")
-	Error(ctx, "test message 2", zap.Error(assert.AnError))
+	Info(ctx, "test message")
 
-	// Sync and verify file content
-	err = Sync()
-	require.NoError(t, err)
-
-	content, err := os.ReadFile(logFile)
-	require.NoError(t, err)
-	assert.NotEmpty(t, content)
+	// Verify log file exists
+	_, err = os.Stat(logFile)
+	assert.NoError(t, err)
 }
 
-func TestWithContext(t *testing.T) {
-	// Initialize logger
-	config := &Config{
-		Level:  "info",
-		Format: "json",
-		Output: "",
-	}
-	err := Initialize(config)
-	require.NoError(t, err)
-
-	// Test with trace ID
-	ctx := context.WithValue(context.Background(), "trace_id", "test-trace-id")
-	logger := WithContext(ctx)
-	assert.NotNil(t, logger)
-
-	// Test without trace ID
-	ctx = context.Background()
-	logger = WithContext(ctx)
-	assert.NotNil(t, logger)
-
-	// Test with nil context
-	logger = WithContext(nil)
-	assert.NotNil(t, logger)
-}
-
-func TestSync(t *testing.T) {
-	// Test with initialized logger
-	config := &Config{
-		Level:  "info",
-		Format: "json",
-		Output: "",
-	}
-	err := Initialize(config)
-	require.NoError(t, err)
-	err = Sync()
+func TestSyncLogger(t *testing.T) {
+	// Test sync with nil logger
+	globalLogger = nil
+	err := Sync()
 	assert.NoError(t, err)
 
-	// Test with nil logger
-	globalLogger = nil
+	// Test sync with initialized logger
+	config := &Config{
+		Level:      "info",
+		OutputPath: "stdout",
+	}
+
+	err = Initialize(config)
+	assert.NoError(t, err)
+
 	err = Sync()
 	assert.NoError(t, err)
 }

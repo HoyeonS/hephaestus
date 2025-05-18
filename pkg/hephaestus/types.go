@@ -37,9 +37,8 @@ type NodeStatus string
 
 const (
 	NodeStatusInitializing NodeStatus = "initializing"
-	NodeStatusActive       NodeStatus = "active"
+	NodeStatusReady       NodeStatus = "ready"
 	NodeStatusError       NodeStatus = "error"
-	NodeStatusRemoved     NodeStatus = "removed"
 )
 
 // SystemNode represents a node in the system
