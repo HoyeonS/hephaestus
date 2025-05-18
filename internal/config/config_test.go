@@ -12,40 +12,36 @@ import (
 
 func TestConfigManager(t *testing.T) {
 	t.Run("New", func(t *testing.T) {
-		manager := New()
+		manager := NewConfigurationManager()
 		assert.NotNil(t, manager)
 	})
 
 	t.Run("Set and Get", func(t *testing.T) {
-		manager := New()
+		manager := NewConfigurationManager()
 		config := &hephaestus.Config{
-			GitHub: hephaestus.GitHubConfig{
-				Token:      "token",
-				Owner:      "owner",
-				Repository: "repo",
-				Branch:     "main",
+			Repository: &hephaestus.RepositoryConfig{
+				Token:    "token",
+				URL:      "URL",
+				Type:     "type",
+				Branch:   "main",
+				BasePath: "/",
 			},
-			AI: hephaestus.AIConfig{
-				Provider: "openai",
+			Model: &hephaestus.ModelConfig{
+				Provider: "aiprovider",
 				APIKey:   "key",
+				Model:    "model",
 			},
-			Log: hephaestus.LogConfig{
+			Log: &hephaestus.LogConfig{
 				Level:  "info",
-				Format: "json",
+				Output: "json",
 			},
-			Repository: hephaestus.RepositoryConfig{
-				Path:        "/path/to/repo",
-				MaxFiles:    10000,
-				MaxFileSize: 1 << 20,
-			},
-			Mode: "suggest",
 		}
-
-		err := manager.Set(config)
+		systemConfig, _ := SystemConfigurationFactory(config, "")
+		err := manager.Set(systemConfig)
 		assert.NoError(t, err)
 
 		got := manager.Get()
-		assert.Equal(t, config, got)
+		assert.Equal(t, systemConfig, got)
 	})
 }
 
@@ -65,22 +61,22 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "missing GitHub token",
 			config: &hephaestus.Config{
-				GitHub: hephaestus.GitHubConfig{
-					Owner:      "owner",
-					Repository: "repo",
+				Repository: &hephaestus.RepositoryConfig{
+					Token:    "",
+					URL:      "URL",
+					Type:     "type",
+					Branch:   "main",
+					BasePath: "/",
 				},
-				AI: hephaestus.AIConfig{
-					Provider: "openai",
+				Model: &hephaestus.ModelConfig{
+					Provider: "aiprovider",
 					APIKey:   "key",
+					Model:    "model",
 				},
-				Log: hephaestus.LogConfig{
+				Log: &hephaestus.LogConfig{
 					Level:  "info",
-					Format: "json",
+					Output: "json",
 				},
-				Repository: hephaestus.RepositoryConfig{
-					Path: "/path",
-				},
-				Mode: "suggest",
 			},
 			wantErr:     true,
 			errContains: "GitHub token is required",
@@ -88,22 +84,22 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "missing AI provider",
 			config: &hephaestus.Config{
-				GitHub: hephaestus.GitHubConfig{
-					Token:      "token",
-					Owner:      "owner",
-					Repository: "repo",
+				Repository: &hephaestus.RepositoryConfig{
+					Token:    "token",
+					URL:      "URL",
+					Type:     "type",
+					Branch:   "main",
+					BasePath: "/",
 				},
-				AI: hephaestus.AIConfig{
-					APIKey: "key",
+				Model: &hephaestus.ModelConfig{
+					Provider: "",
+					APIKey:   "key",
+					Model:    "model",
 				},
-				Log: hephaestus.LogConfig{
+				Log: &hephaestus.LogConfig{
 					Level:  "info",
-					Format: "json",
+					Output: "json",
 				},
-				Repository: hephaestus.RepositoryConfig{
-					Path: "/path",
-				},
-				Mode: "suggest",
 			},
 			wantErr:     true,
 			errContains: "AI provider is required",
@@ -111,74 +107,45 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "invalid log level",
 			config: &hephaestus.Config{
-				GitHub: hephaestus.GitHubConfig{
-					Token:      "token",
-					Owner:      "owner",
-					Repository: "repo",
+				Repository: &hephaestus.RepositoryConfig{
+					Token:    "token",
+					URL:      "URL",
+					Type:     "type",
+					Branch:   "main",
+					BasePath: "/",
 				},
-				AI: hephaestus.AIConfig{
-					Provider: "openai",
+				Model: &hephaestus.ModelConfig{
+					Provider: "aiprovider",
 					APIKey:   "key",
+					Model:    "model",
 				},
-				Log: hephaestus.LogConfig{
-					Level:  "invalid",
-					Format: "json",
+				Log: &hephaestus.LogConfig{
+					Level:  "",
+					Output: "json",
 				},
-				Repository: hephaestus.RepositoryConfig{
-					Path: "/path",
-				},
-				Mode: "suggest",
 			},
 			wantErr:     true,
 			errContains: "invalid log level",
 		},
 		{
-			name: "invalid mode",
-			config: &hephaestus.Config{
-				GitHub: hephaestus.GitHubConfig{
-					Token:      "token",
-					Owner:      "owner",
-					Repository: "repo",
-				},
-				AI: hephaestus.AIConfig{
-					Provider: "openai",
-					APIKey:   "key",
-				},
-				Log: hephaestus.LogConfig{
-					Level:  "info",
-					Format: "json",
-				},
-				Repository: hephaestus.RepositoryConfig{
-					Path: "/path",
-				},
-				Mode: "invalid",
-			},
-			wantErr:     true,
-			errContains: "invalid mode",
-		},
-		{
 			name: "valid config",
 			config: &hephaestus.Config{
-				GitHub: hephaestus.GitHubConfig{
-					Token:      "token",
-					Owner:      "owner",
-					Repository: "repo",
-					Branch:     "main",
+				Repository: &hephaestus.RepositoryConfig{
+					Token:    "token",
+					URL:      "URL",
+					Type:     "type",
+					Branch:   "main",
+					BasePath: "/",
 				},
-				AI: hephaestus.AIConfig{
-					Provider: "openai",
+				Model: &hephaestus.ModelConfig{
+					Provider: "aiprovider",
 					APIKey:   "key",
+					Model:    "model",
 				},
-				Log: hephaestus.LogConfig{
+				Log: &hephaestus.LogConfig{
 					Level:  "info",
-					Format: "json",
+					Output: "json",
 				},
-				Repository: hephaestus.RepositoryConfig{
-					Path:        "/path",
-					MaxFiles:    10000,
-					MaxFileSize: 1 << 20,
-				},
-				Mode: "suggest",
 			},
 			wantErr: false,
 		},
@@ -186,14 +153,23 @@ func TestConfigValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			manager := New()
-			err := manager.Set(tt.config)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errContains)
+			manager := NewConfigurationManager()
+			if systemConfig, err := SystemConfigurationFactory(tt.config, ""); err == nil {
+				if tt.wantErr {
+					assert.Error(t, err)
+					assert.Contains(t, err.Error(), tt.errContains)
+				} else {
+					assert.NoError(t, err)
+				}
 			} else {
-				assert.NoError(t, err)
+				err := manager.Set(systemConfig)
+
+				if tt.wantErr {
+					assert.Error(t, err)
+					assert.Contains(t, err.Error(), tt.errContains)
+				} else {
+					assert.NoError(t, err)
+				}
 			}
 		})
 	}
@@ -209,31 +185,30 @@ func TestConfigFile(t *testing.T) {
 
 	// Create test configuration
 	config := &hephaestus.Config{
-		GitHub: hephaestus.GitHubConfig{
-			Token:      "token",
-			Owner:      "owner",
-			Repository: "repo",
-			Branch:     "main",
+		Repository: &hephaestus.RepositoryConfig{
+			Token:    "token",
+			URL:      "URL",
+			Type:     "type",
+			Branch:   "main",
+			BasePath: "/",
 		},
-		AI: hephaestus.AIConfig{
-			Provider: "openai",
+		Model: &hephaestus.ModelConfig{
+			Provider: "aiprovider",
 			APIKey:   "key",
+			Model:    "model",
 		},
-		Log: hephaestus.LogConfig{
+		Log: &hephaestus.LogConfig{
 			Level:  "info",
-			Format: "json",
+			Output: "json",
 		},
-		Repository: hephaestus.RepositoryConfig{
-			Path:        "/path/to/repo",
-			MaxFiles:    10000,
-			MaxFileSize: 1 << 20,
-		},
-		Mode: "suggest",
 	}
 
 	t.Run("Save and Load", func(t *testing.T) {
-		manager := New()
-		err := manager.Set(config)
+		manager := NewConfigurationManager()
+		systemConfig, err := SystemConfigurationFactory(config, "")
+		require.NoError(t, err)
+
+		err = manager.Set(systemConfig)
 		require.NoError(t, err)
 
 		// Save configuration
@@ -253,11 +228,11 @@ func TestConfigFile(t *testing.T) {
 func TestEnvironmentVariables(t *testing.T) {
 	// Set environment variables
 	envVars := map[string]string{
-		"GITHUB_TOKEN":        "env-token",
-		"GITHUB_OWNER":        "env-owner",
-		"GITHUB_REPO":         "env-repo",
-		"GITHUB_BRANCH":       "env-branch",
-		"AI_PROVIDER":         "env-provider",
+		"GITHUB_TOKEN":       "env-token",
+		"GITHUB_OWNER":       "env-owner",
+		"GITHUB_REPO":        "env-repo",
+		"GITHUB_BRANCH":      "env-branch",
+		"AI_PROVIDER":        "env-provider",
 		"AI_API_KEY":         "env-key",
 		"LOG_LEVEL":          "info",
 		"LOG_FORMAT":         "json",
@@ -331,21 +306,21 @@ func TestLoadConfig(t *testing.T) {
 			name: "valid config",
 			path: "testdata/valid_config.yaml",
 			expected: &hephaestus.Config{
-				LogLevel:   "info",
-				LogOutput:  "stdout",
-				NodeID:     "test-node",
+				LogLevel:  "info",
+				LogOutput: "stdout",
+				NodeID:    "test-node",
 				Repository: &hephaestus.RepositoryConfig{
-					Owner:     "HoyeonS",
-					Name:      "hephaestus",
-					Token:     "test-token",
-					BasePath:  "/base/path",
-					Branch:    "main",
+					Owner:    "HoyeonS",
+					Name:     "hephaestus",
+					Token:    "test-token",
+					BasePath: "/base/path",
+					Branch:   "main",
 				},
 				Model: &hephaestus.ModelConfig{
-					Version:  "v1",
-					APIKey:   "test-key",
-					BaseURL:  "https://api.example.com",
-					Timeout:  30,
+					Version: "v1",
+					APIKey:  "test-key",
+					BaseURL: "https://api.example.com",
+					Timeout: 30,
 				},
 			},
 			wantErr: false,
@@ -389,21 +364,21 @@ func TestValidateConfig(t *testing.T) {
 		{
 			name: "valid config",
 			config: &hephaestus.Config{
-				LogLevel:   "info",
-				LogOutput:  "stdout",
-				NodeID:     "test-node",
+				LogLevel:  "info",
+				LogOutput: "stdout",
+				NodeID:    "test-node",
 				Repository: &hephaestus.RepositoryConfig{
-					Owner:     "HoyeonS",
-					Name:      "hephaestus",
-					Token:     "test-token",
-					BasePath:  "/base/path",
-					Branch:    "main",
+					Owner:    "HoyeonS",
+					Name:     "hephaestus",
+					Token:    "test-token",
+					BasePath: "/base/path",
+					Branch:   "main",
 				},
 				Model: &hephaestus.ModelConfig{
-					Version:  "v1",
-					APIKey:   "test-key",
-					BaseURL:  "https://api.example.com",
-					Timeout:  30,
+					Version: "v1",
+					APIKey:  "test-key",
+					BaseURL: "https://api.example.com",
+					Timeout: 30,
 				},
 			},
 			wantErr: false,
@@ -416,20 +391,20 @@ func TestValidateConfig(t *testing.T) {
 		{
 			name: "missing log level",
 			config: &hephaestus.Config{
-				LogOutput:  "stdout",
-				NodeID:     "test-node",
+				LogOutput: "stdout",
+				NodeID:    "test-node",
 				Repository: &hephaestus.RepositoryConfig{
-					Owner:     "HoyeonS",
-					Name:      "hephaestus",
-					Token:     "test-token",
-					BasePath:  "/base/path",
-					Branch:    "main",
+					Owner:    "HoyeonS",
+					Name:     "hephaestus",
+					Token:    "test-token",
+					BasePath: "/base/path",
+					Branch:   "main",
 				},
 				Model: &hephaestus.ModelConfig{
-					Version:  "v1",
-					APIKey:   "test-key",
-					BaseURL:  "https://api.example.com",
-					Timeout:  30,
+					Version: "v1",
+					APIKey:  "test-key",
+					BaseURL: "https://api.example.com",
+					Timeout: 30,
 				},
 			},
 			wantErr: true,
@@ -441,10 +416,10 @@ func TestValidateConfig(t *testing.T) {
 				LogOutput: "stdout",
 				NodeID:    "test-node",
 				Model: &hephaestus.ModelConfig{
-					Version:  "v1",
-					APIKey:   "test-key",
-					BaseURL:  "https://api.example.com",
-					Timeout:  30,
+					Version: "v1",
+					APIKey:  "test-key",
+					BaseURL: "https://api.example.com",
+					Timeout: 30,
 				},
 			},
 			wantErr: true,
@@ -456,11 +431,11 @@ func TestValidateConfig(t *testing.T) {
 				LogOutput: "stdout",
 				NodeID:    "test-node",
 				Repository: &hephaestus.RepositoryConfig{
-					Owner:     "HoyeonS",
-					Name:      "hephaestus",
-					Token:     "test-token",
-					BasePath:  "/base/path",
-					Branch:    "main",
+					Owner:    "HoyeonS",
+					Name:     "hephaestus",
+					Token:    "test-token",
+					BasePath: "/base/path",
+					Branch:   "main",
 				},
 			},
 			wantErr: true,
@@ -477,4 +452,4 @@ func TestValidateConfig(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
-} 
+}

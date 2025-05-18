@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
 	"gopkg.in/yaml.v2"
@@ -300,4 +301,90 @@ func validateLogConfig(config *hephaestus.LogConfig) error {
 	}
 
 	return nil
+}
+
+// SystemConfigurationFactory creates a SystemConfiguration from a Config with additional parameters
+func SystemConfigurationFactory(config *hephaestus.Config, operationalMode string) (*hephaestus.SystemConfiguration, error) {
+	if config == nil {
+		return nil, fmt.Errorf("config cannot be nil")
+	}
+
+	// Set default operational mode if not provided
+	if operationalMode == "" {
+		operationalMode = "suggest"
+	}
+
+	// Validate operational mode
+	validModes := map[string]bool{"suggest": true, "deploy": true}
+	if !validModes[operationalMode] {
+		return nil, fmt.Errorf("invalid operational mode: %s", operationalMode)
+	}
+
+	// Create SystemConfiguration
+	sysConfig := &hephaestus.SystemConfiguration{
+		// Convert Repository settings
+		RemoteSettings: hephaestus.RemoteRepositoryConfiguration{
+			AuthToken:       config.Repository.Token,
+			RepositoryOwner: extractOwnerFromURL(config.Repository.URL),
+			RepositoryName:  extractRepoFromURL(config.Repository.URL),
+			TargetBranch:    config.Repository.Branch,
+		},
+		// Convert Model settings
+		ModelSettings: hephaestus.ModelServiceConfiguration{
+			ServiceProvider: config.Model.Provider,
+			ServiceAPIKey:   config.Model.APIKey,
+			ModelVersion:    config.Model.Model,
+		},
+		// Convert Log settings
+		LoggingSettings: hephaestus.LoggingConfiguration{
+			LogLevel:     config.Log.Level,
+			OutputFormat: config.Log.Output,
+		},
+		// Set Repository settings
+		RepositorySettings: hephaestus.RepositoryConfiguration{
+			RepositoryPath: config.Repository.BasePath,
+			FileLimit:      10000,  // Default value
+			FileSizeLimit:  1 << 20, // Default 1MB
+		},
+		OperationalMode: operationalMode,
+	}
+
+	// Validate the created configuration
+	if err := validateSystemConfiguration(sysConfig); err != nil {
+		return nil, fmt.Errorf("invalid system configuration: %w", err)
+	}
+
+	return sysConfig, nil
+}
+
+// Helper function to extract owner from repository URL
+func extractOwnerFromURL(url string) string {
+	// Expected format: https://github.com/owner/repo
+	// or git@github.com:owner/repo.git
+	parts := strings.Split(url, "/")
+	if len(parts) < 2 {
+		return ""
+	}
+	// Handle SSH format
+	if strings.Contains(parts[0], "@") {
+		colonParts := strings.Split(parts[len(parts)-2], ":")
+		if len(colonParts) > 1 {
+			return colonParts[1]
+		}
+	}
+	// Handle HTTPS format
+	return parts[len(parts)-2]
+}
+
+// Helper function to extract repository name from URL
+func extractRepoFromURL(url string) string {
+	// Expected format: https://github.com/owner/repo
+	// or git@github.com:owner/repo.git
+	parts := strings.Split(url, "/")
+	if len(parts) < 1 {
+		return ""
+	}
+	repoName := parts[len(parts)-1]
+	// Remove .git suffix if present
+	return strings.TrimSuffix(repoName, ".git")
 }
