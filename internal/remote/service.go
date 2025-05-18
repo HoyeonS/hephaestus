@@ -15,9 +15,10 @@ import (
 
 // Service implements the RemoteRepositoryService interface
 type Service struct {
-	client          *github.Client
-	config          *hephaestus.RemoteSettings
+	client           *github.Client
 	metricsCollector hephaestus.MetricsCollectionService
+	owner            string
+	repo             string
 
 	// Active repository connections
 	connections     map[string]*RepositoryConnection
@@ -32,50 +33,145 @@ type RepositoryConnection struct {
 	IsActive      bool
 }
 
-// NewService creates a new instance of the remote repository service
-func NewService(metricsCollector hephaestus.MetricsCollectionService) *Service {
+// NewService creates a new remote repository service instance
+func NewService(token, owner, repo string, metrics hephaestus.MetricsCollectionService) *Service {
+	ctx := context.Background()
+	ts := oauth2.StaticTokenSource(
+		&oauth2.Token{AccessToken: token},
+	)
+	tc := oauth2.NewClient(ctx, ts)
+
 	return &Service{
-		metricsCollector: metricsCollector,
-		connections:     make(map[string]*RepositoryConnection),
+		client:           github.NewClient(tc),
+		metricsCollector: metrics,
+		owner:            owner,
+		repo:             repo,
+		connections:      make(map[string]*RepositoryConnection),
 	}
 }
 
-// Initialize sets up the remote repository service with the provided configuration
-func (s *Service) Initialize(ctx context.Context, config *hephaestus.RemoteSettings) error {
-	if config == nil {
-		logger.Error(ctx, "remote repository configuration is required")
-		return fmt.Errorf("remote repository configuration is required")
-	}
-
-	if config.AuthToken == "" {
-		logger.Error(ctx, "authentication token is required")
-		return fmt.Errorf("authentication token is required")
-	}
-
-	logger.Info(ctx, "initializing remote repository service",
-		zap.String("owner", config.RepositoryOwner),
-		zap.String("repository", config.RepositoryName),
+// Initialize sets up the remote repository service
+func (s *Service) Initialize(ctx context.Context) error {
+	logger.Info(ctx, "Initializing remote repository service",
+		logger.Field("owner", s.owner),
+		logger.Field("repo", s.repo),
 	)
 
-	// Create GitHub client with authentication
-	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: config.AuthToken},
-	)
-	tc := oauth2.NewClient(ctx, ts)
-	s.client = github.NewClient(tc)
-	s.config = config
-
-	// Validate repository access
-	if err := s.validateRepositoryAccess(ctx); err != nil {
-		logger.Error(ctx, "failed to validate repository access",
-			zap.String("owner", config.RepositoryOwner),
-			zap.String("repository", config.RepositoryName),
-			zap.Error(err),
+	// Verify repository access
+	_, _, err := s.client.Repositories.Get(ctx, s.owner, s.repo)
+	if err != nil {
+		logger.Error(ctx, "Failed to access repository",
+			logger.Field("error", err),
 		)
-		return fmt.Errorf("failed to validate repository access: %v", err)
+		return fmt.Errorf("failed to access repository: %v", err)
 	}
 
 	return nil
+}
+
+// GetFileContents retrieves the contents of a file from the repository
+func (s *Service) GetFileContents(ctx context.Context, path string) ([]byte, error) {
+	start := time.Now()
+	logger.Info(ctx, "Retrieving file contents",
+		logger.Field("path", path),
+	)
+
+	fileContent, _, _, err := s.client.Repositories.GetContents(ctx, s.owner, s.repo, path, nil)
+	duration := time.Since(start)
+
+	if err != nil {
+		logger.Error(ctx, "Failed to retrieve file contents",
+			logger.Field("path", path),
+			logger.Field("error", err),
+		)
+		s.metricsCollector.RecordOperationMetrics("get_file_contents", duration, false)
+		return nil, fmt.Errorf("failed to retrieve file contents: %v", err)
+	}
+
+	content, err := fileContent.GetContent()
+	if err != nil {
+		logger.Error(ctx, "Failed to decode file contents",
+			logger.Field("path", path),
+			logger.Field("error", err),
+		)
+		s.metricsCollector.RecordOperationMetrics("get_file_contents", duration, false)
+		return nil, fmt.Errorf("failed to decode file contents: %v", err)
+	}
+
+	s.metricsCollector.RecordOperationMetrics("get_file_contents", duration, true)
+	return []byte(content), nil
+}
+
+// UpdateFileContents updates the contents of a file in the repository
+func (s *Service) UpdateFileContents(ctx context.Context, path string, content []byte, message string) error {
+	start := time.Now()
+	logger.Info(ctx, "Updating file contents",
+		logger.Field("path", path),
+	)
+
+	// Get the current file to obtain its SHA
+	fileContent, _, _, err := s.client.Repositories.GetContents(ctx, s.owner, s.repo, path, nil)
+	duration := time.Since(start)
+
+	if err != nil {
+		logger.Error(ctx, "Failed to get current file contents",
+			logger.Field("path", path),
+			logger.Field("error", err),
+		)
+		s.metricsCollector.RecordOperationMetrics("update_file_contents", duration, false)
+		return fmt.Errorf("failed to get current file contents: %v", err)
+	}
+
+	// Create the update request
+	opts := &github.RepositoryContentFileOptions{
+		Message: github.String(message),
+		Content: content,
+		SHA:     fileContent.SHA,
+	}
+
+	_, _, err = s.client.Repositories.UpdateFile(ctx, s.owner, s.repo, path, opts)
+	if err != nil {
+		logger.Error(ctx, "Failed to update file contents",
+			logger.Field("path", path),
+			logger.Field("error", err),
+		)
+		s.metricsCollector.RecordOperationMetrics("update_file_contents", duration, false)
+		return fmt.Errorf("failed to update file contents: %v", err)
+	}
+
+	s.metricsCollector.RecordOperationMetrics("update_file_contents", duration, true)
+	return nil
+}
+
+// CreatePullRequest creates a new pull request in the repository
+func (s *Service) CreatePullRequest(ctx context.Context, title, body, head, base string) (string, error) {
+	start := time.Now()
+	logger.Info(ctx, "Creating pull request",
+		logger.Field("title", title),
+		logger.Field("head", head),
+		logger.Field("base", base),
+	)
+
+	pr := &github.NewPullRequest{
+		Title: github.String(title),
+		Body:  github.String(body),
+		Head:  github.String(head),
+		Base:  github.String(base),
+	}
+
+	pullRequest, _, err := s.client.PullRequests.Create(ctx, s.owner, s.repo, pr)
+	duration := time.Since(start)
+
+	if err != nil {
+		logger.Error(ctx, "Failed to create pull request",
+			logger.Field("error", err),
+		)
+		s.metricsCollector.RecordOperationMetrics("create_pull_request", duration, false)
+		return "", fmt.Errorf("failed to create pull request: %v", err)
+	}
+
+	s.metricsCollector.RecordOperationMetrics("create_pull_request", duration, true)
+	return pullRequest.GetHTMLURL(), nil
 }
 
 // CreateIssue creates a new issue in the remote repository
@@ -126,57 +222,6 @@ func (s *Service) CreateIssue(ctx context.Context, nodeID string, issue *hephaes
 	return nil
 }
 
-// CreatePullRequest creates a new pull request in the remote repository
-func (s *Service) CreatePullRequest(ctx context.Context, nodeID string, pr *hephaestus.PullRequest) error {
-	conn, err := s.getOrCreateConnection(ctx, nodeID)
-	if err != nil {
-		logger.Error(ctx, "failed to get or create repository connection",
-			zap.String("node_id", nodeID),
-			zap.Error(err),
-		)
-		return fmt.Errorf("failed to get or create repository connection: %v", err)
-	}
-
-	logger.Info(ctx, "creating new pull request",
-		zap.String("node_id", nodeID),
-		zap.String("title", pr.Title),
-		zap.String("base", pr.BaseBranch),
-		zap.String("head", pr.HeadBranch),
-	)
-
-	// Create GitHub pull request
-	githubPR := &github.NewPullRequest{
-		Title:               &pr.Title,
-		Body:               &pr.Description,
-		Head:               &pr.HeadBranch,
-		Base:               &pr.BaseBranch,
-		MaintainerCanModify: github.Bool(true),
-	}
-
-	_, _, err = s.client.PullRequests.Create(ctx, conn.Owner, conn.Repository, githubPR)
-	if err != nil {
-		logger.Error(ctx, "failed to create pull request",
-			zap.String("node_id", nodeID),
-			zap.String("title", pr.Title),
-			zap.Error(err),
-		)
-		if err := s.metricsCollector.RecordRepositoryError(ctx, nodeID, "create_pr"); err != nil {
-			logger.Warn(ctx, "failed to record repository error metric",
-				zap.String("node_id", nodeID),
-				zap.Error(err),
-			)
-		}
-		return fmt.Errorf("failed to create pull request: %v", err)
-	}
-
-	logger.Info(ctx, "pull request created successfully",
-		zap.String("node_id", nodeID),
-		zap.String("title", pr.Title),
-	)
-
-	return nil
-}
-
 // Cleanup removes the repository connection for a node
 func (s *Service) Cleanup(ctx context.Context, nodeID string) error {
 	s.connectionMutex.Lock()
@@ -199,20 +244,6 @@ func (s *Service) Cleanup(ctx context.Context, nodeID string) error {
 
 // Helper functions
 
-func (s *Service) validateRepositoryAccess(ctx context.Context) error {
-	logger.Debug(ctx, "validating repository access",
-		zap.String("owner", s.config.RepositoryOwner),
-		zap.String("repository", s.config.RepositoryName),
-	)
-
-	_, _, err := s.client.Repositories.Get(ctx, s.config.RepositoryOwner, s.config.RepositoryName)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (s *Service) getOrCreateConnection(ctx context.Context, nodeID string) (*RepositoryConnection, error) {
 	s.connectionMutex.Lock()
 	defer s.connectionMutex.Unlock()
@@ -221,13 +252,13 @@ func (s *Service) getOrCreateConnection(ctx context.Context, nodeID string) (*Re
 	if !exists {
 		logger.Info(ctx, "creating new repository connection",
 			zap.String("node_id", nodeID),
-			zap.String("owner", s.config.RepositoryOwner),
-			zap.String("repository", s.config.RepositoryName),
+			zap.String("owner", s.owner),
+			zap.String("repository", s.repo),
 		)
 		conn = &RepositoryConnection{
 			NodeID:     nodeID,
-			Owner:      s.config.RepositoryOwner,
-			Repository: s.config.RepositoryName,
+			Owner:      s.owner,
+			Repository: s.repo,
 			LastActive: time.Now(),
 			IsActive:   true,
 		}
