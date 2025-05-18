@@ -140,7 +140,7 @@ func TestSyncLogger(t *testing.T) {
 
 func TestLoggingMethods(t *testing.T) {
 	// Initialize logger for tests
-	err := Initialize(Config{
+	err := Initialize(&Config{
 		Level:      "debug",
 		OutputPath: "json",
 	})
@@ -180,10 +180,9 @@ func TestLogging(t *testing.T) {
 	}
 
 	// Initialize logger with file output
-	err := Initialize(Config{
-		Level:       "debug",
-		Format:      "json",
-		OutputPaths: []string{logFile},
+	err := Initialize(&Config{
+		Level:      "debug",
+		OutputPath: "json",
 	})
 	require.NoError(t, err)
 
@@ -236,7 +235,7 @@ func TestGetTraceID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := GetTraceID(tt.ctx)
+			got := extractTraceID(tt.ctx)
 			assert.Equal(t, tt.want, got)
 		})
 	}
