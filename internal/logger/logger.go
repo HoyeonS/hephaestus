@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -14,19 +15,13 @@ var (
 	globalLogger *zap.Logger
 )
 
-// Config represents the logger configuration
-type Config struct {
-	Level      string   `yaml:"level"`
-	OutputPath string   `yaml:"output_path"`
-}
-
 // Field creates a field for structured logging
 func Field(key string, value interface{}) zap.Field {
 	return zap.Any(key, value)
 }
 
 // Initialize sets up the logger with the provided configuration
-func Initialize(config *Config) error {
+func Initialize(config *hephaestus.LogConfig) error {
 	if config == nil {
 		return fmt.Errorf("logger configuration is required")
 	}
@@ -54,16 +49,16 @@ func Initialize(config *Config) error {
 
 	// Configure output paths
 	var output zapcore.WriteSyncer
-	if config.OutputPath == "stdout" {
+	if config.Output == "stdout" {
 		output = zapcore.AddSync(os.Stdout)
 	} else {
 		// Create log directory if it doesn't exist
-		if err := os.MkdirAll(filepath.Dir(config.OutputPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(config.Output), 0755); err != nil {
 			return fmt.Errorf("failed to create log directory: %v", err)
 		}
 
 		// Open log file
-		file, err := os.OpenFile(config.OutputPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		file, err := os.OpenFile(config.Output, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			return fmt.Errorf("failed to open log file: %v", err)
 		}
@@ -155,4 +150,4 @@ func extractTraceID(ctx context.Context) *zap.Field {
 		return &field
 	}
 	return nil
-} 
+}

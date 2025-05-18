@@ -26,7 +26,7 @@ type MockModelService struct {
 	mock.Mock
 }
 
-func (m *MockModelService) Initialize(ctx context.Context, config *hephaestus.ModelSettings) error {
+func (m *MockModelService) Initialize(ctx context.Context, config *hephaestus.ModelConfig) error {
 	args := m.Called(ctx, config)
 	return args.Error(0)
 }
@@ -40,7 +40,7 @@ type MockRemoteRepo struct {
 	mock.Mock
 }
 
-func (m *MockRemoteRepo) Initialize(ctx context.Context, config *hephaestus.RemoteSettings) error {
+func (m *MockRemoteRepo) Initialize(ctx context.Context, config *hephaestus.RepositoryConfig) error {
 	args := m.Called(ctx, config)
 	return args.Error(0)
 }
@@ -72,8 +72,8 @@ func (m *MockMetricsCollector) CleanupNodeMetrics(ctx context.Context, nodeID st
 func setupTest(t *testing.T) (context.Context, *Manager, *MockLogProcessor, *MockModelService, *MockRemoteRepo, *MockMetricsCollector) {
 	// Initialize logger for tests
 	err := logger.Initialize(&logger.Config{
-		Level:  "debug",
-		Format: "console",
+		Level:      "debug",
+		OutputPath: "console",
 	})
 	require.NoError(t, err)
 
@@ -149,8 +149,8 @@ func TestGetSystemNode(t *testing.T) {
 		node := &hephaestus.SystemNode{
 			NodeIdentifier: "test-node",
 			CurrentStatus:  hephaestus.NodeStatusOperational,
-			CreatedAt:     time.Now(),
-			LastActive:    time.Now(),
+			CreatedAt:      time.Now(),
+			LastActive:     time.Now(),
 		}
 		manager.nodes[node.NodeIdentifier] = node
 
@@ -176,8 +176,8 @@ func TestUpdateNodeOperationalStatus(t *testing.T) {
 		node := &hephaestus.SystemNode{
 			NodeIdentifier: "test-node",
 			CurrentStatus:  hephaestus.NodeStatusOperational,
-			CreatedAt:     time.Now(),
-			LastActive:    time.Now(),
+			CreatedAt:      time.Now(),
+			LastActive:     time.Now(),
 		}
 		manager.nodes[node.NodeIdentifier] = node
 
@@ -205,8 +205,8 @@ func TestDeleteSystemNode(t *testing.T) {
 		node := &hephaestus.SystemNode{
 			NodeIdentifier: "test-node",
 			CurrentStatus:  hephaestus.NodeStatusOperational,
-			CreatedAt:     time.Now(),
-			LastActive:    time.Now(),
+			CreatedAt:      time.Now(),
+			LastActive:     time.Now(),
 		}
 		manager.nodes[node.NodeIdentifier] = node
 
@@ -228,4 +228,4 @@ func TestDeleteSystemNode(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "node not found")
 	})
-} 
+}

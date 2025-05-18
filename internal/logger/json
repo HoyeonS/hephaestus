@@ -6,3 +6,11 @@
 {"level":"info","ts":"2025-05-18T14:18:09.385-0500","msg":"info message","count":1,"trace_id":"test-trace-id"}
 {"level":"warn","ts":"2025-05-18T14:18:09.385-0500","msg":"warn message","flag":true,"trace_id":"test-trace-id"}
 {"level":"error","ts":"2025-05-18T14:18:09.385-0500","msg":"error message","error":"test error","trace_id":"test-trace-id"}
+{"level":"debug","ts":"2025-05-18T15:59:05.024-0500","msg":"debug message","key":"value","count":42,"trace_id":"test-trace-id"}
+{"level":"info","ts":"2025-05-18T15:59:05.024-0500","msg":"info message","key":"value","count":42,"trace_id":"test-trace-id"}
+{"level":"warn","ts":"2025-05-18T15:59:05.025-0500","msg":"warn message","key":"value","count":42,"trace_id":"test-trace-id"}
+{"level":"error","ts":"2025-05-18T15:59:05.025-0500","msg":"error message","key":"value","count":42,"trace_id":"test-trace-id"}
+{"level":"debug","ts":"2025-05-18T15:59:05.025-0500","msg":"debug message","key":"value","trace_id":"test-trace-id"}
+{"level":"info","ts":"2025-05-18T15:59:05.025-0500","msg":"info message","count":1,"trace_id":"test-trace-id"}
+{"level":"warn","ts":"2025-05-18T15:59:05.025-0500","msg":"warn message","flag":true,"trace_id":"test-trace-id"}
+{"level":"error","ts":"2025-05-18T15:59:05.025-0500","msg":"error message","error":"test error","trace_id":"test-trace-id"}

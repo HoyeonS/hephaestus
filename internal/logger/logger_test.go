@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -16,22 +17,22 @@ import (
 func TestInitializeLogger(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *Config
+		config      *hephaestus.LogConfig
 		expectError bool
 	}{
 		{
 			name: "valid config with stdout",
-			config: &Config{
-				Level:      "info",
-				OutputPath: "stdout",
+			config: &hephaestus.LogConfig{
+				Level:  "info",
+				Output: "stdout",
 			},
 			expectError: false,
 		},
 		{
 			name: "valid config with file output",
-			config: &Config{
-				Level:      "debug",
-				OutputPath: "test.log",
+			config: &hephaestus.LogConfig{
+				Level:  "debug",
+				Output: "test.log",
 			},
 			expectError: false,
 		},
@@ -42,9 +43,9 @@ func TestInitializeLogger(t *testing.T) {
 		},
 		{
 			name: "invalid log level",
-			config: &Config{
-				Level:      "invalid",
-				OutputPath: "stdout",
+			config: &hephaestus.LogConfig{
+				Level:  "invalid",
+				Output: "stdout",
 			},
 			expectError: true,
 		},
@@ -64,8 +65,8 @@ func TestInitializeLogger(t *testing.T) {
 			}
 
 			// Clean up test log file if created
-			if tt.config != nil && tt.config.OutputPath != "stdout" {
-				os.Remove(tt.config.OutputPath)
+			if tt.config != nil && tt.config.Output != "stdout" {
+				os.Remove(tt.config.Output)
 			}
 		})
 	}
@@ -73,9 +74,9 @@ func TestInitializeLogger(t *testing.T) {
 
 func TestLoggingWithContext(t *testing.T) {
 	// Setup test config
-	config := &Config{
-		Level:      "debug",
-		OutputPath: "stdout",
+	config := &hephaestus.LogConfig{
+		Level:  "debug",
+		Output: "stdout",
 	}
 
 	err := Initialize(config)
@@ -101,9 +102,9 @@ func TestLoggingToFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	logFile := filepath.Join(tmpDir, "test.log")
 
-	config := &Config{
-		Level:      "info",
-		OutputPath: logFile,
+	config := &hephaestus.LogConfig{
+		Level:  "info",
+		Output: logFile,
 	}
 
 	err := Initialize(config)
@@ -126,9 +127,9 @@ func TestSyncLogger(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Test sync with initialized logger
-	config := &Config{
-		Level:      "info",
-		OutputPath: "stdout",
+	config := &hephaestus.LogConfig{
+		Level:  "info",
+		Output: "stdout",
 	}
 
 	err = Initialize(config)
@@ -140,9 +141,9 @@ func TestSyncLogger(t *testing.T) {
 
 func TestLoggingMethods(t *testing.T) {
 	// Initialize logger for tests
-	err := Initialize(&Config{
-		Level:      "debug",
-		OutputPath: "json",
+	err := Initialize(&hephaestus.LogConfig{
+		Level:  "debug",
+		Output: "json",
 	})
 	require.NoError(t, err)
 
@@ -180,9 +181,9 @@ func TestLogging(t *testing.T) {
 	}
 
 	// Initialize logger with file output
-	err := Initialize(&Config{
-		Level:      "debug",
-		OutputPath: "json",
+	err := Initialize(&hephaestus.LogConfig{
+		Level:  "debug",
+		Output: "json",
 	})
 	require.NoError(t, err)
 
