@@ -4,270 +4,224 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
-	"github.com/google/uuid"
-	"github.com/HoyeonS/hephaestus/internal/github"
-	"github.com/HoyeonS/hephaestus/internal/ai"
+	"github.com/HoyeonS/hephaestus/internal/config"
 	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
-	pb "github.com/HoyeonS/hephaestus/proto"
+	pb "github.com/HoyeonS/hephaestus/pkg/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// Server implements the Hephaestus gRPC service
-type Server struct {
-	pb.UnimplementedHephaestusServer
-	nodes map[string]*hephaestus.HephaestusNode
-	repos map[string]*hephaestus.VirtualRepository
-	mu    sync.RWMutex
-
-	// Channels for each node's log processing
-	logStreams map[string]chan *pb.LogEntry
-}
-
-// NewServer creates a new Hephaestus server
-func NewServer() *Server {
-	return &Server{
-		nodes:      make(map[string]*hephaestus.HephaestusNode),
-		repos:      make(map[string]*hephaestus.VirtualRepository),
-		logStreams: make(map[string]chan *pb.LogEntry),
-	}
-}
-
-// Initialize implements the Initialize RPC method
-func (s *Server) Initialize(ctx context.Context, req *pb.InitializeRequest) (*pb.InitializeResponse, error) {
-	// Convert proto config to internal config
-	config := &hephaestus.Config{
-		GitHub: hephaestus.GitHubConfig{
-			Repository: req.Config.Github.Repository,
-			Branch:    req.Config.Github.Branch,
-			Token:     req.Config.Github.Token,
-		},
-		AI: hephaestus.AIConfig{
-			Provider: req.Config.Ai.Provider,
-			APIKey:   req.Config.Ai.ApiKey,
-			Model:    req.Config.Ai.Model,
-		},
-		Log: hephaestus.LogConfig{
-			Level:          req.Config.Log.Level,
-			ThresholdLevel: req.Config.Log.ThresholdLevel,
-		},
-		Mode: req.Config.Mode,
-	}
-
-	// Validate configuration
-	if err := hephaestus.ValidateConfig(config); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid configuration: %v", err)
-	}
-
-	// Create GitHub client
-	githubClient, err := github.NewClient(config.GitHub.Token, config.GitHub.Repository)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to create GitHub client: %v", err)
-	}
-
-	// Fetch repository and create virtual repository
-	vRepo, err := githubClient.FetchRepository(ctx, config.GitHub.Branch)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to fetch repository: %v", err)
-	}
-
-	// Generate IDs
-	nodeID := uuid.New().String()
-	repoID := uuid.New().String()
-
-	// Create node
-	node := &hephaestus.HephaestusNode{
-		ID:            nodeID,
-		Configuration: config,
-		RepositoryID:  repoID,
-		Status:        "active",
-		CreatedAt:     time.Now(),
-		LastActive:    time.Now(),
-	}
-
-	// Store node and repository
-	s.mu.Lock()
-	s.nodes[nodeID] = node
-	s.repos[repoID] = vRepo
-	s.logStreams[nodeID] = make(chan *pb.LogEntry, 100) // Buffer for log processing
-	s.mu.Unlock()
-
-	return &pb.InitializeResponse{
-		Status:  "success",
-		Message: "Node initialized successfully",
-		NodeId:  nodeID,
-	}, nil
-}
-
-// StreamLogs implements the StreamLogs RPC method
-func (s *Server) StreamLogs(stream pb.Hephaestus_StreamLogsServer) error {
-	// Get first message to identify the node
-	firstLog, err := stream.Recv()
-	if err != nil {
-		return status.Errorf(codes.Internal, "failed to receive first log: %v", err)
-	}
-
-	nodeID := firstLog.NodeId
+// HephaestusServer implements the HephaestusService gRPC interface
+type HephaestusServer struct {
+	pb.UnimplementedHephaestusServiceServer
 	
-	// Verify node exists
-	s.mu.RLock()
-	node, exists := s.nodes[nodeID]
-	logChan := s.logStreams[nodeID]
-	s.mu.RUnlock()
+	// Dependencies
+	nodeManager          hephaestus.NodeLifecycleManager
+	logProcessor        hephaestus.LogProcessingService
+	modelService        hephaestus.ModelServiceProvider
+	remoteRepoService   hephaestus.RemoteRepositoryService
+	metricsCollector    hephaestus.MetricsCollectionService
+	
+	// Node registry
+	nodes     map[string]*hephaestus.SystemNode
+	nodesMutex sync.RWMutex
+}
 
-	if !exists {
-		return status.Errorf(codes.NotFound, "node not found: %s", nodeID)
-	}
-
-	// Create AI client based on configuration
-	aiClient, err := ai.NewClient(node.Configuration.AI)
-	if err != nil {
-		return status.Errorf(codes.Internal, "failed to create AI client: %v", err)
-	}
-
-	// Start goroutine to receive logs
-	errChan := make(chan error, 1)
-	go func() {
-		for {
-			log, err := stream.Recv()
-			if err != nil {
-				errChan <- err
-				return
-			}
-
-			// Check if log level meets threshold
-			if !isLogLevelMet(log.Level, node.Configuration.Log.ThresholdLevel) {
-				continue
-			}
-
-			select {
-			case logChan <- log:
-			default:
-				// Channel full, log processing too slow
-				errChan <- status.Error(codes.ResourceExhausted, "log processing backed up")
-				return
-			}
-		}
-	}()
-
-	// Process logs and generate solutions
-	for {
-		select {
-		case err := <-errChan:
-			return err
-		case log := <-logChan:
-			// Update last active timestamp
-			s.mu.Lock()
-			node.LastActive = time.Now()
-			s.mu.Unlock()
-
-			// Generate solution using AI
-			solution, err := aiClient.GenerateSolution(stream.Context(), log, s.repos[node.RepositoryID])
-			if err != nil {
-				continue // Skip this log if solution generation fails
-			}
-
-			// Prepare response based on mode
-			response := &pb.SolutionResponse{
-				Status:  "success",
-				Message: "Solution generated",
-			}
-
-			if node.Configuration.Mode == "suggest" {
-				// Create suggested fix
-				suggestedFix := &pb.SuggestedFix{
-					SolutionId:  solution.ID,
-					Description: solution.Description,
-					Changes:     make([]*pb.CodeChange, len(solution.Changes)),
-				}
-
-				for i, change := range solution.Changes {
-					suggestedFix.Changes[i] = &pb.CodeChange{
-						FilePath:     change.FilePath,
-						OriginalCode: change.OriginalCode,
-						UpdatedCode:  change.UpdatedCode,
-						LineStart:    int32(change.LineStart),
-						LineEnd:      int32(change.LineEnd),
-					}
-				}
-
-				response.Result = &pb.SolutionResponse_SuggestedFix{
-					SuggestedFix: suggestedFix,
-				}
-			} else {
-				// Create pull request
-				pr, err := githubClient.CreatePullRequest(stream.Context(), solution)
-				if err != nil {
-					continue // Skip if PR creation fails
-				}
-
-				response.Result = &pb.SolutionResponse_PullRequest{
-					PullRequest: &pb.PullRequest{
-						Url:    pr.URL,
-						Title:  pr.Title,
-						Branch: pr.Branch,
-					},
-				}
-			}
-
-			if err := stream.Send(response); err != nil {
-				return status.Errorf(codes.Internal, "failed to send solution: %v", err)
-			}
-		}
+// NewHephaestusServer creates a new instance of the Hephaestus server
+func NewHephaestusServer(
+	nodeManager hephaestus.NodeLifecycleManager,
+	logProcessor hephaestus.LogProcessingService,
+	modelService hephaestus.ModelServiceProvider,
+	remoteRepoService hephaestus.RemoteRepositoryService,
+	metricsCollector hephaestus.MetricsCollectionService,
+) *HephaestusServer {
+	return &HephaestusServer{
+		nodeManager:        nodeManager,
+		logProcessor:      logProcessor,
+		modelService:      modelService,
+		remoteRepoService: remoteRepoService,
+		metricsCollector:  metricsCollector,
+		nodes:            make(map[string]*hephaestus.SystemNode),
 	}
 }
 
-// GetNode implements the GetNode RPC method
-func (s *Server) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.GetNodeResponse, error) {
-	s.mu.RLock()
-	node, exists := s.nodes[req.NodeId]
-	s.mu.RUnlock()
-
-	if !exists {
-		return nil, status.Errorf(codes.NotFound, "node not found: %s", req.NodeId)
+// InitializeNode initializes a new node with the provided configuration
+func (s *HephaestusServer) InitializeNode(ctx context.Context, req *pb.InitializeNodeRequest) (*pb.InitializeNodeResponse, error) {
+	if req.Configuration == nil {
+		return nil, status.Error(codes.InvalidArgument, "configuration is required")
 	}
 
-	return &pb.GetNodeResponse{
-		Id:            node.ID,
-		Configuration: convertConfigToProto(node.Configuration),
-		RepositoryId:  node.RepositoryID,
-		Status:        node.Status,
-		CreatedAt:     node.CreatedAt.Format(time.RFC3339),
-		LastActive:    node.LastActive.Format(time.RFC3339),
+	// Convert proto configuration to internal configuration
+	config := &hephaestus.SystemConfiguration{
+		RemoteSettings:    convertRemoteConfig(req.Configuration.RemoteSettings),
+		ModelSettings:     convertModelConfig(req.Configuration.ModelSettings),
+		LoggingSettings:   convertLoggingConfig(req.Configuration.LoggingSettings),
+		OperationalMode:   req.Configuration.OperationalMode,
+		RepositorySettings: convertRepoConfig(req.Configuration.RepositorySettings),
+	}
+
+	// Create new node
+	node, err := s.nodeManager.CreateSystemNode(ctx, config)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to create node: %v", err)
+	}
+
+	// Store node in registry
+	s.nodesMutex.Lock()
+	s.nodes[node.NodeIdentifier] = node
+	s.nodesMutex.Unlock()
+
+	return &pb.InitializeNodeResponse{
+		NodeIdentifier:    node.NodeIdentifier,
+		OperationalStatus: string(node.CurrentStatus),
+		StatusMessage:     "Node initialized successfully",
 	}, nil
 }
 
-// Helper functions
+// GetNodeStatus retrieves the current status of a node
+func (s *HephaestusServer) GetNodeStatus(ctx context.Context, req *pb.NodeStatusRequest) (*pb.NodeStatusResponse, error) {
+	s.nodesMutex.RLock()
+	node, exists := s.nodes[req.NodeIdentifier]
+	s.nodesMutex.RUnlock()
 
-func isLogLevelMet(logLevel, thresholdLevel string) bool {
-	levels := map[string]int{
-		"debug": 0,
-		"info":  1,
-		"warn":  2,
-		"error": 3,
+	if !exists {
+		return nil, status.Errorf(codes.NotFound, "node not found: %s", req.NodeIdentifier)
 	}
 
-	return levels[logLevel] >= levels[thresholdLevel]
+	return &pb.NodeStatusResponse{
+		NodeIdentifier:       node.NodeIdentifier,
+		OperationalStatus:    string(node.CurrentStatus),
+		CurrentConfiguration: convertConfigToProto(node.NodeConfig),
+		StatusMessage:        "Node status retrieved successfully",
+	}, nil
 }
 
-func convertConfigToProto(config *hephaestus.Config) *pb.Config {
-	return &pb.Config{
-		Github: &pb.GitHubConfig{
-			Repository: config.GitHub.Repository,
-			Branch:    config.GitHub.Branch,
-			Token:     config.GitHub.Token,
-		},
-		Ai: &pb.AIConfig{
-			Provider: config.AI.Provider,
-			ApiKey:   config.AI.APIKey,
-			Model:    config.AI.Model,
-		},
-		Log: &pb.LogConfig{
-			Level:          config.Log.Level,
-			ThresholdLevel: config.Log.ThresholdLevel,
-		},
-		Mode: config.Mode,
+// UpdateNodeConfiguration updates the configuration of an existing node
+func (s *HephaestusServer) UpdateNodeConfiguration(ctx context.Context, req *pb.UpdateNodeConfigurationRequest) (*pb.UpdateNodeConfigurationResponse, error) {
+	s.nodesMutex.Lock()
+	defer s.nodesMutex.Unlock()
+
+	node, exists := s.nodes[req.NodeIdentifier]
+	if !exists {
+		return nil, status.Errorf(codes.NotFound, "node not found: %s", req.NodeIdentifier)
 	}
-} 
+
+	// Convert and validate new configuration
+	newConfig := &hephaestus.SystemConfiguration{
+		RemoteSettings:    convertRemoteConfig(req.NewConfiguration.RemoteSettings),
+		ModelSettings:     convertModelConfig(req.NewConfiguration.ModelSettings),
+		LoggingSettings:   convertLoggingConfig(req.NewConfiguration.LoggingSettings),
+		OperationalMode:   req.NewConfiguration.OperationalMode,
+		RepositorySettings: convertRepoConfig(req.NewConfiguration.RepositorySettings),
+	}
+
+	// Update node configuration
+	if err := s.nodeManager.UpdateNodeOperationalStatus(ctx, node.NodeIdentifier, hephaestus.NodeStatusInitializing); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to update node status: %v", err)
+	}
+
+	node.NodeConfig = newConfig
+	node.CurrentStatus = hephaestus.NodeStatusOperational
+
+	return &pb.UpdateNodeConfigurationResponse{
+		NodeIdentifier: node.NodeIdentifier,
+		StatusMessage:  "Configuration updated successfully",
+		Success:       true,
+	}, nil
+}
+
+// DeleteNode removes a node from the system
+func (s *HephaestusServer) DeleteNode(ctx context.Context, req *pb.DeleteNodeRequest) (*pb.DeleteNodeResponse, error) {
+	s.nodesMutex.Lock()
+	defer s.nodesMutex.Unlock()
+
+	if _, exists := s.nodes[req.NodeIdentifier]; !exists {
+		return nil, status.Errorf(codes.NotFound, "node not found: %s", req.NodeIdentifier)
+	}
+
+	if err := s.nodeManager.DeleteSystemNode(ctx, req.NodeIdentifier); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to delete node: %v", err)
+	}
+
+	delete(s.nodes, req.NodeIdentifier)
+
+	return &pb.DeleteNodeResponse{
+		StatusMessage: "Node deleted successfully",
+		Success:      true,
+	}, nil
+}
+
+// Helper functions for configuration conversion
+func convertRemoteConfig(config *pb.RemoteRepositoryConfiguration) hephaestus.RemoteRepositoryConfiguration {
+	if config == nil {
+		return hephaestus.RemoteRepositoryConfiguration{}
+	}
+	return hephaestus.RemoteRepositoryConfiguration{
+		AuthToken:       config.AuthToken,
+		RepositoryOwner: config.RepositoryOwner,
+		RepositoryName:  config.RepositoryName,
+		TargetBranch:    config.TargetBranch,
+	}
+}
+
+func convertModelConfig(config *pb.ModelServiceConfiguration) hephaestus.ModelServiceConfiguration {
+	if config == nil {
+		return hephaestus.ModelServiceConfiguration{}
+	}
+	return hephaestus.ModelServiceConfiguration{
+		ServiceProvider: config.ServiceProvider,
+		ServiceAPIKey:   config.ServiceApiKey,
+		ModelVersion:    config.ModelVersion,
+	}
+}
+
+func convertLoggingConfig(config *pb.LoggingConfiguration) hephaestus.LoggingConfiguration {
+	if config == nil {
+		return hephaestus.LoggingConfiguration{}
+	}
+	return hephaestus.LoggingConfiguration{
+		LogLevel:     config.LogLevel,
+		OutputFormat: config.OutputFormat,
+	}
+}
+
+func convertRepoConfig(config *pb.RepositoryConfiguration) hephaestus.RepositoryConfiguration {
+	if config == nil {
+		return hephaestus.RepositoryConfiguration{}
+	}
+	return hephaestus.RepositoryConfiguration{
+		RepositoryPath: config.RepositoryPath,
+		FileLimit:      int(config.FileLimit),
+		FileSizeLimit:  config.FileSizeLimit,
+	}
+}
+
+func convertConfigToProto(config *hephaestus.SystemConfiguration) *pb.SystemConfiguration {
+	if config == nil {
+		return nil
+	}
+	return &pb.SystemConfiguration{
+		RemoteSettings: &pb.RemoteRepositoryConfiguration{
+			AuthToken:       config.RemoteSettings.AuthToken,
+			RepositoryOwner: config.RemoteSettings.RepositoryOwner,
+			RepositoryName:  config.RemoteSettings.RepositoryName,
+			TargetBranch:    config.RemoteSettings.TargetBranch,
+		},
+		ModelSettings: &pb.ModelServiceConfiguration{
+			ServiceProvider: config.ModelSettings.ServiceProvider,
+			ServiceApiKey:   config.ModelSettings.ServiceAPIKey,
+			ModelVersion:    config.ModelSettings.ModelVersion,
+		},
+		LoggingSettings: &pb.LoggingConfiguration{
+			LogLevel:     config.LoggingSettings.LogLevel,
+			OutputFormat: config.LoggingSettings.OutputFormat,
+		},
+		OperationalMode: config.OperationalMode,
+		RepositorySettings: &pb.RepositoryConfiguration{
+			RepositoryPath: config.RepositorySettings.RepositoryPath,
+			FileLimit:      int32(config.RepositorySettings.FileLimit),
+			FileSizeLimit:  config.RepositorySettings.FileSizeLimit,
+		},
+	}
+}

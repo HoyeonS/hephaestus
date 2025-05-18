@@ -2,106 +2,146 @@ syntax = "proto3";
 
 package hephaestus;
 
-option go_package = "github.com/HoyeonS/hephaestus/proto";
+option go_package = "github.com/HoyeonS/hephaestus/pkg/proto";
 
-// Hephaestus service definition
-service Hephaestus {
-  // Initialize creates a new Hephaestus instance with the given configuration
-  rpc Initialize(InitializeRequest) returns (InitializeResponse) {}
-  
-  // StreamLogs establishes a bidirectional stream for log processing and solution delivery
-  rpc StreamLogs(stream LogEntry) returns (stream SolutionResponse) {}
-  
-  // GetNode retrieves information about a Hephaestus node
-  rpc GetNode(GetNodeRequest) returns (GetNodeResponse) {}
+// HephaestusService provides the main API interface for the Hephaestus system
+service HephaestusService {
+    // Node Management
+    rpc InitializeNode(InitializeNodeRequest) returns (InitializeNodeResponse);
+    rpc GetNodeStatus(NodeStatusRequest) returns (NodeStatusResponse);
+    rpc UpdateNodeConfiguration(UpdateNodeConfigurationRequest) returns (UpdateNodeConfigurationResponse);
+    rpc DeleteNode(DeleteNodeRequest) returns (DeleteNodeResponse);
+
+    // Log Processing
+    rpc ProcessLogEntry(ProcessLogEntryRequest) returns (ProcessLogEntryResponse);
+    rpc StreamLogEntries(StreamLogEntriesRequest) returns (stream LogEntryData);
+
+    // Solution Management
+    rpc GetSolutionProposal(SolutionProposalRequest) returns (SolutionProposalResponse);
+    rpc ApplySolution(ApplySolutionRequest) returns (ApplySolutionResponse);
 }
 
-// Configuration message
-message Config {
-  GitHubConfig github = 1;
-  AIConfig ai = 2;
-  LogConfig log = 3;
-  string mode = 4; // "suggest" or "deploy"
+// Configuration Messages
+message SystemConfiguration {
+    RemoteRepositoryConfiguration remote_settings = 1;
+    ModelServiceConfiguration model_settings = 2;
+    LoggingConfiguration logging_settings = 3;
+    string operational_mode = 4;
+    RepositoryConfiguration repository_settings = 5;
 }
 
-message GitHubConfig {
-  string repository = 1; // format: "owner/repo"
-  string branch = 2;
-  string token = 3;
+message RemoteRepositoryConfiguration {
+    string auth_token = 1;
+    string repository_owner = 2;
+    string repository_name = 3;
+    string target_branch = 4;
 }
 
-message AIConfig {
-  string provider = 1;
-  string api_key = 2;
-  string model = 3;
+message ModelServiceConfiguration {
+    string service_provider = 1;
+    string service_api_key = 2;
+    string model_version = 3;
 }
 
-message LogConfig {
-  string level = 1;
-  string threshold_level = 2;
+message LoggingConfiguration {
+    string log_level = 1;
+    string output_format = 2;
 }
 
-// Initialize request/response messages
-message InitializeRequest {
-  Config config = 1;
+message RepositoryConfiguration {
+    string repository_path = 1;
+    int32 file_limit = 2;
+    int64 file_size_limit = 3;
 }
 
-message InitializeResponse {
-  string status = 1;
-  string message = 2;
-  string node_id = 3;
+// Node Management Messages
+message InitializeNodeRequest {
+    SystemConfiguration configuration = 1;
 }
 
-// Log streaming messages
-message LogEntry {
-  string node_id = 1;
-  string level = 2;
-  string message = 3;
-  string timestamp = 4;
-  map<string, string> metadata = 5;
-  string stack_trace = 6;
+message InitializeNodeResponse {
+    string node_identifier = 1;
+    string operational_status = 2;
+    string status_message = 3;
 }
 
-message SolutionResponse {
-  string status = 1;
-  string message = 2;
-  oneof result {
-    SuggestedFix suggested_fix = 3;
-    PullRequest pull_request = 4;
-  }
+message NodeStatusRequest {
+    string node_identifier = 1;
 }
 
-message SuggestedFix {
-  string solution_id = 1;
-  string description = 2;
-  repeated CodeChange changes = 3;
+message NodeStatusResponse {
+    string node_identifier = 1;
+    string operational_status = 2;
+    SystemConfiguration current_configuration = 3;
+    string status_message = 4;
 }
 
-message CodeChange {
-  string file_path = 1;
-  string original_code = 2;
-  string updated_code = 3;
-  int32 line_start = 4;
-  int32 line_end = 5;
+message UpdateNodeConfigurationRequest {
+    string node_identifier = 1;
+    SystemConfiguration new_configuration = 2;
 }
 
-message PullRequest {
-  string url = 1;
-  string title = 2;
-  string branch = 3;
-  repeated CodeChange changes = 4;
+message UpdateNodeConfigurationResponse {
+    string node_identifier = 1;
+    string status_message = 2;
+    bool success = 3;
 }
 
-// Node information messages
-message GetNodeRequest {
-  string node_id = 1;
+message DeleteNodeRequest {
+    string node_identifier = 1;
 }
 
-message GetNodeResponse {
-  string id = 1;
-  Config configuration = 2;
-  string repository_id = 3;
-  string status = 4;
-  string created_at = 5;
-  string last_active = 6;
+message DeleteNodeResponse {
+    string status_message = 1;
+    bool success = 2;
+}
+
+// Log Processing Messages
+message LogEntryData {
+    string node_identifier = 1;
+    string log_level = 2;
+    string log_message = 3;
+    string log_timestamp = 4;
+    map<string, string> log_metadata = 5;
+    string error_trace = 6;
+}
+
+message ProcessLogEntryRequest {
+    string node_identifier = 1;
+    LogEntryData log_entry = 2;
+}
+
+message ProcessLogEntryResponse {
+    string entry_identifier = 1;
+    string status_message = 2;
+    bool success = 3;
+}
+
+message StreamLogEntriesRequest {
+    string node_identifier = 1;
+    string log_level_filter = 2;
+}
+
+// Solution Management Messages
+message SolutionProposalRequest {
+    string node_identifier = 1;
+    string log_entry_identifier = 2;
+}
+
+message SolutionProposalResponse {
+    string solution_identifier = 1;
+    string proposed_changes = 2;
+    repeated string affected_files = 3;
+    double confidence_score = 4;
+}
+
+message ApplySolutionRequest {
+    string node_identifier = 1;
+    string solution_identifier = 2;
+}
+
+message ApplySolutionResponse {
+    string status_message = 1;
+    bool success = 2;
+    repeated string modified_files = 3;
 } 
