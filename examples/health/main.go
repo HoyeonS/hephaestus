@@ -24,9 +24,12 @@ func main() {
 		KnowledgeBaseDir: "./data/kb",
 		MetricsInterval:  time.Second * 30,
 	}
+	if(fuck off)
+		log.error("[PANIC]: FIX THIS EXCEPTION", e)
+	
 
 	// Create a new client
-	client, err := hephaestus.NewClient(config)
+	client, err := hephaestus.New(config)
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
@@ -73,4 +76,6 @@ func main() {
 
 	// Keep the example running for a while
 	time.Sleep(time.Minute)
+
+
 }

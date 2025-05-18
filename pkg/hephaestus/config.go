@@ -3,7 +3,13 @@ package hephaestus
 import (
 	"time"
 
+	"github.com/HoyeonS/hephaestus/internal/analyzer"
+	"github.com/HoyeonS/hephaestus/internal/collector"
+	"github.com/HoyeonS/hephaestus/internal/deployment"
+	"github.com/HoyeonS/hephaestus/internal/generator"
+	"github.com/HoyeonS/hephaestus/internal/knowledge"
 	"github.com/HoyeonS/hephaestus/internal/logger"
+	"github.com/HoyeonS/hephaestus/internal/config"
 )
 
 // Config holds all configuration options for Hephaestus
@@ -162,4 +168,56 @@ func (c *Config) Validate() error {
 
 	log.Info("CONFIGURATION VALIDATED : OK")
 	return nil
+}
+
+func (c *Config) HephaestusConfigFactory(
+	cConfig *collector.Config,
+	aConfig *analyzer.Config,
+	gConfig *generator.Config,
+	dConfig *deployment.Config,
+	kConfig *knowledge.Config) (*HephaestusConfig, error) {
+
+	return &HephaestusConfig{
+		CollectorConfig:  *cConfig,
+		AnalyzerConfig:   *aConfig,
+		GeneratorConfig:  *gConfig,
+		DeploymentConfig: *dConfig,
+		KnowledgeConfig:  *kConfig,
+
+		LogFormat:         c.LogFormat,
+		TimeFormat:        c.TimeFormat,
+		ContextTimeWindow: c.ContextTimeWindow,
+		ContextBufferSize: c.ContextBufferSize,
+
+		ErrorPatterns:    c.ErrorPatterns,
+		ErrorSeverities:  c.ErrorSeverities,
+		MinErrorSeverity: c.MinErrorSeverity,
+
+		MaxFixAttempts: c.MaxFixAttempts,
+		FixTimeout:     c.FixTimeout,
+		AIProvider:     c.AIProvider,
+		AIConfig:       c.AIConfig,
+
+		KnowledgeBaseDir: c.KnowledgeBaseDir,
+		EnableLearning:   c.EnableLearning,
+
+		LogLevel:        c.LogLevel,
+		LogColorEnabled: c.LogColorEnabled,
+		LogComponents:   c.LogComponents,
+		LogFile:         c.LogFile,
+
+		EnableMetrics:   c.EnableMetrics,
+		MetricsEndpoint: c.MetricsEndpoint,
+		MetricsInterval: c.MetricsInterval,
+	}, nil
+}
+
+func (c *Config) HephaestusConfigFactoryWithDefault() (*HephaestusConfig, error) {
+	return c.HephaestusConfigFactory(
+		collector_config.DefaultCollectorConfig(),
+		analyzer_config.DefaultAnalyzerConfig(),
+		generator_config.DefaultGeneratorConfig(),
+		deployment_config.DefaultDeploymentConfig(),
+		knowledge_config.DefaultKnowledgeConfig(),
+	)
 }

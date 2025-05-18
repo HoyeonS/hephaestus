@@ -2,109 +2,106 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"flag"
 	"log"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
-	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
-	"gopkg.in/yaml.v3"
+	pb "github.com/HoyeonS/hephaestus/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+)
+
+var (
+	addr = flag.String("addr", "localhost:50051", "The server address")
+	repo = flag.String("repo", "", "GitHub repository (owner/repo)")
+	token = flag.String("token", "", "GitHub token")
+	aiKey = flag.String("ai-key", "", "AI provider API key")
 )
 
 func main() {
-	// Load configuration
-	config, err := loadConfig("config/config.yaml")
+	flag.Parse()
+
+	if *repo == "" || *token == "" || *aiKey == "" {
+		log.Fatal("repo, token, and ai-key flags are required")
+	}
+
+	// Set up a connection to the server
+	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		log.Fatalf("did not connect: %v", err)
 	}
+	defer conn.Close()
 
-	// Create Hephaestus client
-	client, err := hephaestus.New(config)
+	// Create client
+	client := pb.NewHephaestusClient(conn)
+
+	// Initialize Hephaestus
+	ctx := context.Background()
+	resp, err := client.Initialize(ctx, &pb.InitializeRequest{
+		Config: &pb.Config{
+			Github: &pb.GitHubConfig{
+				Repository: *repo,
+				Branch:    "main",
+				Token:     *token,
+			},
+			Ai: &pb.AIConfig{
+				Provider: "openai",
+				ApiKey:   *aiKey,
+			},
+			Log: &pb.LogConfig{
+				Level: "error",
+			},
+			Mode: "suggest",
+		},
+	})
 	if err != nil {
-		log.Fatalf("Failed to create Hephaestus client: %v", err)
+		log.Fatalf("could not initialize: %v", err)
 	}
+	log.Printf("Initialized with node ID: %s", resp.NodeId)
 
-	// Create context with cancellation
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Start Hephaestus
-	if err := client.Start(ctx); err != nil {
-		log.Fatalf("Failed to start Hephaestus: %v", err)
-	}
-
-	// Handle suggestions and fixes
-	go handleSuggestions(client.GetSuggestionChannel())
-	go handleFixes(client.GetFixChannel())
-	go handleErrors(client.GetErrorChannel())
-
-	// Wait for shutdown signal
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	<-sigChan
-
-	// Graceful shutdown
-	log.Println("Shutting down...")
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer shutdownCancel()
-
-	if err := client.Stop(); err != nil {
-		log.Printf("Error during shutdown: %v", err)
-	}
-
-	select {
-	case <-shutdownCtx.Done():
-		log.Println("Shutdown timeout exceeded")
-	case <-ctx.Done():
-		log.Println("Shutdown complete")
-	}
-}
-
-func loadConfig(path string) (*hephaestus.Config, error) {
-	data, err := os.ReadFile(path)
+	// Start streaming logs
+	stream, err := client.StreamLogs(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %v", err)
+		log.Fatalf("could not start streaming: %v", err)
 	}
 
-	var config hephaestus.Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse config: %v", err)
+	// Send example error log
+	err = stream.Send(&pb.LogEntry{
+		Level:     "error",
+		Message:   "Null pointer exception in user service",
+		Timestamp: time.Now().Format(time.RFC3339),
+		Metadata: map[string]string{
+			"node_id":    resp.NodeId,
+			"file":       "service/user.go",
+			"line":       "42",
+			"component":  "UserService",
+			"operation": "GetUser",
+		},
+		StackTrace: `goroutine 1 [running]:
+main.(*UserService).GetUser(0x0, 0x123)
+	service/user.go:42 +0x123
+main.main()
+	main.go:15 +0x456`,
+	})
+	if err != nil {
+		log.Fatalf("could not send log: %v", err)
 	}
 
-	return &config, nil
-}
-
-func handleSuggestions(suggestionChan <-chan *hephaestus.FixSuggestion) {
-	for suggestion := range suggestionChan {
-		log.Printf("[HEPHAESTUS] Fix suggestion for error %s:\n", suggestion.ErrorID)
-		log.Printf("Description: %s\n", suggestion.Description)
-		log.Printf("Confidence: %.2f\n", suggestion.Confidence)
-		log.Printf("Proposed changes:\n")
-		for _, change := range suggestion.CodeChanges {
-			log.Printf("- File: %s (lines %d-%d)\n", change.FilePath, change.StartLine, change.EndLine)
-			log.Printf("  Description: %s\n", change.Description)
-			log.Printf("  New code:\n%s\n", change.NewCode)
-		}
+	// Receive and print fix
+	fix, err := stream.Recv()
+	if err != nil {
+		log.Fatalf("could not receive fix: %v", err)
 	}
-}
 
-func handleFixes(fixChan <-chan *models.Fix) {
-	for fix := range fixChan {
-		log.Printf("[HEPHAESTUS] Applied fix for error %s:\n", fix.ErrorID)
-		log.Printf("Strategy: %s\n", fix.Strategy)
-		log.Printf("Status: %s\n", fix.Status)
-		if fix.IsSuccessful() {
-			log.Printf("Fix was successfully applied and verified\n")
-		} else {
-			log.Printf("Fix application failed or was rolled back\n")
-		}
-	}
-}
-
-func handleErrors(errorChan <-chan error) {
-	for err := range errorChan {
-		log.Printf("[HEPHAESTUS] Error: %v\n", err)
+	switch x := fix.Result.(type) {
+	case *pb.FixResponse_SuggestedFix:
+		log.Printf("Received fix suggestion:\n")
+		log.Printf("File: %s\n", x.SuggestedFix.FilePath)
+		log.Printf("Original code:\n%s\n", x.SuggestedFix.OriginalCode)
+		log.Printf("Suggested fix:\n%s\n", x.SuggestedFix.SuggestedCode)
+		log.Printf("Explanation: %s\n", x.SuggestedFix.Explanation)
+	case *pb.FixResponse_PullRequest:
+		log.Printf("Created pull request: %s\n", x.PullRequest.Url)
 	}
 } 

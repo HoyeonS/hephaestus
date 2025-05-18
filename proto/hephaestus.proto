@@ -1,0 +1,94 @@
+syntax = "proto3";
+
+package hephaestus;
+
+option go_package = "github.com/HoyeonS/hephaestus/proto";
+
+// Hephaestus service definition
+service Hephaestus {
+  // Initialize creates a new Hephaestus instance with the given configuration
+  rpc Initialize(InitializeRequest) returns (InitializeResponse) {}
+  
+  // StreamLogs establishes a bidirectional stream for log processing
+  rpc StreamLogs(stream LogEntry) returns (stream FixResponse) {}
+}
+
+// Configuration for initializing Hephaestus
+message Config {
+  GitHubConfig github = 1;
+  AIConfig ai = 2;
+  LogConfig log = 3;
+  string mode = 4; // "suggest" or "deploy"
+}
+
+// GitHub configuration
+message GitHubConfig {
+  string repository = 1;
+  string branch = 2;
+  string token = 3;
+}
+
+// AI provider configuration
+message AIConfig {
+  string provider = 1;
+  string api_key = 2;
+}
+
+// Log configuration
+message LogConfig {
+  string level = 1; // "debug", "info", "warn", "error", "fatal"
+}
+
+// Request to initialize Hephaestus
+message InitializeRequest {
+  Config config = 1;
+}
+
+// Response from initialization
+message InitializeResponse {
+  string status = 1;
+  string message = 2;
+  string node_id = 3;
+}
+
+// Log entry from client application
+message LogEntry {
+  string level = 1;
+  string message = 2;
+  string timestamp = 3;
+  map<string, string> metadata = 4;
+  string stack_trace = 5;
+}
+
+// Response containing fix information
+message FixResponse {
+  string status = 1;
+  string message = 2;
+  oneof result {
+    SuggestedFix suggested_fix = 3;
+    PullRequest pull_request = 4;
+  }
+}
+
+// Suggested fix when in "suggest" mode
+message SuggestedFix {
+  string file_path = 1;
+  string original_code = 2;
+  string suggested_code = 3;
+  string explanation = 4;
+}
+
+// Pull request information when in "deploy" mode
+message PullRequest {
+  string url = 1;
+  string title = 2;
+  string branch = 3;
+  repeated FileChange changes = 4;
+}
+
+// File changes in a pull request
+message FileChange {
+  string file_path = 1;
+  string original_content = 2;
+  string new_content = 3;
+} 
