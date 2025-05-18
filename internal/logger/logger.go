@@ -2,17 +2,15 @@ package logger
 
 import (
 	"context"
+	"fmt"
 	"os"
-	"sync"
+	"path/filepath"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
-var (
-	globalLogger *zap.Logger
-	once         sync.Once
-)
+var globalLogger *zap.Logger
 
 // Config represents logger configuration
 type Config struct {
@@ -23,82 +21,139 @@ type Config struct {
 
 // Initialize sets up the global logger with the provided configuration
 func Initialize(config Config) error {
-	var err error
-	once.Do(func() {
-		var level zapcore.Level
-		if err = level.UnmarshalText([]byte(config.Level)); err != nil {
-			return
-		}
+	// Validate log level
+	var level zapcore.Level
+	if err := level.UnmarshalText([]byte(config.Level)); err != nil {
+		return fmt.Errorf("invalid log level: %v", err)
+	}
 
-		encoderConfig := zapcore.EncoderConfig{
-			TimeKey:        "timestamp",
-			LevelKey:       "level",
-			NameKey:        "logger",
-			CallerKey:      "caller",
-			FunctionKey:    zapcore.OmitKey,
-			MessageKey:     "message",
-			StacktraceKey:  "stacktrace",
-			LineEnding:     zapcore.DefaultLineEnding,
-			EncodeLevel:    zapcore.CapitalLevelEncoder,
-			EncodeTime:     zapcore.ISO8601TimeEncoder,
-			EncodeDuration: zapcore.StringDurationEncoder,
-			EncodeCaller:   zapcore.ShortCallerEncoder,
-		}
+	// Create encoder config
+	encoderConfig := zapcore.EncodingConfig{
+		TimeKey:        "ts",
+		LevelKey:       "level",
+		NameKey:        "logger",
+		CallerKey:      "caller",
+		MessageKey:     "msg",
+		StacktraceKey:  "stacktrace",
+		LineEnding:     zapcore.DefaultLineEnding,
+		EncodeLevel:    zapcore.LowercaseLevelEncoder,
+		EncodeTime:     zapcore.ISO8601TimeEncoder,
+		EncodeDuration: zapcore.SecondsDurationEncoder,
+		EncodeCaller:   zapcore.ShortCallerEncoder,
+	}
 
-		var encoder zapcore.Encoder
-		switch config.Format {
-		case "json":
-			encoder = zapcore.NewJSONEncoder(encoderConfig)
-		case "console":
-			encoder = zapcore.NewConsoleEncoder(encoderConfig)
+	// Set default format if not specified
+	if config.Format == "" {
+		config.Format = "json"
+	}
+
+	// Create encoder based on format
+	var encoder zapcore.Encoder
+	switch config.Format {
+	case "json":
+		encoder = zapcore.NewJSONEncoder(encoderConfig)
+	case "console":
+		encoder = zapcore.NewConsoleEncoder(encoderConfig)
+	default:
+		return fmt.Errorf("unsupported output format: %s", config.Format)
+	}
+
+	// Set default output paths if not specified
+	if len(config.OutputPaths) == 0 {
+		config.OutputPaths = []string{"stdout"}
+	}
+
+	// Create writers for each output path
+	var cores []zapcore.Core
+	for _, path := range config.OutputPaths {
+		var writer zapcore.WriteSyncer
+		switch path {
+		case "stdout":
+			writer = zapcore.AddSync(os.Stdout)
+		case "stderr":
+			writer = zapcore.AddSync(os.Stderr)
 		default:
-			encoder = zapcore.NewJSONEncoder(encoderConfig)
-		}
-
-		// Configure output paths
-		var outputs []zapcore.WriteSyncer
-		if len(config.OutputPaths) == 0 {
-			outputs = append(outputs, zapcore.AddSync(os.Stdout))
-		} else {
-			for _, path := range config.OutputPaths {
-				if path == "stdout" {
-					outputs = append(outputs, zapcore.AddSync(os.Stdout))
-				} else if path == "stderr" {
-					outputs = append(outputs, zapcore.AddSync(os.Stderr))
-				} else {
-					file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-					if err != nil {
-						continue
-					}
-					outputs = append(outputs, zapcore.AddSync(file))
-				}
+			// Create directory if it doesn't exist
+			if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+				return fmt.Errorf("failed to create log directory: %v", err)
 			}
+			file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				return fmt.Errorf("failed to open log file: %v", err)
+			}
+			writer = zapcore.AddSync(file)
 		}
+		core := zapcore.NewCore(encoder, writer, level)
+		cores = append(cores, core)
+	}
 
-		core := zapcore.NewCore(
-			encoder,
-			zapcore.NewMultiWriteSyncer(outputs...),
-			level,
-		)
+	// Create logger with all cores
+	logger := zap.New(zapcore.NewTee(cores...))
+	globalLogger = logger
 
-		globalLogger = zap.New(core,
-			zap.AddCaller(),
-			zap.AddStacktrace(zapcore.ErrorLevel),
-		)
-	})
+	return nil
+}
 
-	return err
+// Debug logs a debug message
+func Debug(ctx context.Context, msg string, fields ...zapcore.Field) {
+	if globalLogger != nil {
+		if traceID := GetTraceID(ctx); traceID != "" {
+			fields = append(fields, zap.String("trace_id", traceID))
+		}
+		globalLogger.Debug(msg, fields...)
+	}
+}
+
+// Info logs an info message
+func Info(ctx context.Context, msg string, fields ...zapcore.Field) {
+	if globalLogger != nil {
+		if traceID := GetTraceID(ctx); traceID != "" {
+			fields = append(fields, zap.String("trace_id", traceID))
+		}
+		globalLogger.Info(msg, fields...)
+	}
+}
+
+// Warn logs a warning message
+func Warn(ctx context.Context, msg string, fields ...zapcore.Field) {
+	if globalLogger != nil {
+		if traceID := GetTraceID(ctx); traceID != "" {
+			fields = append(fields, zap.String("trace_id", traceID))
+		}
+		globalLogger.Warn(msg, fields...)
+	}
+}
+
+// Error logs an error message
+func Error(ctx context.Context, msg string, fields ...zapcore.Field) {
+	if globalLogger != nil {
+		if traceID := GetTraceID(ctx); traceID != "" {
+			fields = append(fields, zap.String("trace_id", traceID))
+		}
+		globalLogger.Error(msg, fields...)
+	}
 }
 
 // WithContext returns a logger with context fields
 func WithContext(ctx context.Context) *zap.Logger {
 	if globalLogger == nil {
-		return zap.NewNop()
+		return nil
 	}
-	return globalLogger.With(zap.String("trace_id", GetTraceID(ctx)))
+	if traceID := GetTraceID(ctx); traceID != "" {
+		return globalLogger.With(zap.String("trace_id", traceID))
+	}
+	return globalLogger
 }
 
-// GetTraceID extracts trace ID from context
+// Sync flushes any buffered log entries
+func Sync() error {
+	if globalLogger != nil {
+		return globalLogger.Sync()
+	}
+	return nil
+}
+
+// GetTraceID extracts the trace ID from the context
 func GetTraceID(ctx context.Context) string {
 	if ctx == nil {
 		return ""
@@ -107,37 +162,4 @@ func GetTraceID(ctx context.Context) string {
 		return traceID
 	}
 	return ""
-}
-
-// Debug logs a message at debug level
-func Debug(ctx context.Context, msg string, fields ...zapcore.Field) {
-	WithContext(ctx).Debug(msg, fields...)
-}
-
-// Info logs a message at info level
-func Info(ctx context.Context, msg string, fields ...zapcore.Field) {
-	WithContext(ctx).Info(msg, fields...)
-}
-
-// Warn logs a message at warn level
-func Warn(ctx context.Context, msg string, fields ...zapcore.Field) {
-	WithContext(ctx).Warn(msg, fields...)
-}
-
-// Error logs a message at error level
-func Error(ctx context.Context, msg string, fields ...zapcore.Field) {
-	WithContext(ctx).Error(msg, fields...)
-}
-
-// Fatal logs a message at fatal level and then calls os.Exit(1)
-func Fatal(ctx context.Context, msg string, fields ...zapcore.Field) {
-	WithContext(ctx).Fatal(msg, fields...)
-}
-
-// Sync flushes any buffered log entries
-func Sync() error {
-	if globalLogger == nil {
-		return nil
-	}
-	return globalLogger.Sync()
 } 
