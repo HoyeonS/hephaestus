@@ -9,6 +9,7 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 BINARY_NAME=hephaestus
 VERSION ?= $(shell git describe --tags --always --dirty)
+GOINSTALL=$(GOCMD) install
 
 # Test parameters
 COVERAGE_THRESHOLD=80
@@ -74,6 +75,10 @@ deps: ## Download dependencies
 	$(GOMOD) download
 	$(GOMOD) tidy
 	$(GOMOD) verify
+
+proto-setup:
+	$(GOINSTALL) google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	export PATH=$PATH:$HOME/go/bin
 
 proto: ## Generate Protocol Buffer code
 	$(PROTOC) --go_out=. --go_opt=paths=source_relative \
