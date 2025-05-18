@@ -370,4 +370,35 @@ func TestStatusToValue(t *testing.T) {
 			assert.Equal(t, tt.expected, value)
 		})
 	}
+}
+
+func TestCollector(t *testing.T) {
+	// Create a new registry for testing
+	registry := prometheus.NewRegistry()
+	collector := NewCollector(registry)
+
+	t.Run("initialize node metrics", func(t *testing.T) {
+		err := collector.InitializeNodeMetrics(context.Background(), "test-node")
+		assert.NoError(t, err)
+	})
+
+	t.Run("record node status change", func(t *testing.T) {
+		err := collector.RecordNodeStatusChange(context.Background(), "test-node", "operational")
+		assert.NoError(t, err)
+	})
+
+	t.Run("record model latency", func(t *testing.T) {
+		err := collector.RecordModelLatency(context.Background(), "test-node", time.Second)
+		assert.NoError(t, err)
+	})
+
+	t.Run("record repository error", func(t *testing.T) {
+		err := collector.RecordRepositoryError(context.Background(), "test-node", "create_issue")
+		assert.NoError(t, err)
+	})
+
+	t.Run("cleanup node metrics", func(t *testing.T) {
+		err := collector.CleanupNodeMetrics(context.Background(), "test-node")
+		assert.NoError(t, err)
+	})
 } 

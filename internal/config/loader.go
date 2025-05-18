@@ -163,4 +163,3 @@ func GetDefaultConfiguration() *hephaestus.SystemConfiguration {
 		OperationalMode: "suggest",
 	}
 } 
-} 

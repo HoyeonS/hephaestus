@@ -319,4 +319,4 @@ func TestLogLevelThreshold(t *testing.T) {
 			assert.Equal(t, tc.expected, result)
 		})
 	}
-})
+}

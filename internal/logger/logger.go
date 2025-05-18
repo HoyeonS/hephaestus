@@ -2,11 +2,8 @@ package logger
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"os"
 	"sync"
-	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
