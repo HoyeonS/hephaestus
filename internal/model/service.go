@@ -8,8 +8,14 @@ import (
 
 	"github.com/HoyeonS/hephaestus/internal/logger"
 	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
+
+// ModelServiceClient represents a client for interacting with the model service
+type ModelServiceClient interface {
+	GenerateSolution(ctx context.Context, prompt string) (string, error)
+}
 
 // Service implements the ModelServiceProvider interface
 type Service struct {
@@ -30,16 +36,11 @@ type ModelSession struct {
 	Configuration *hephaestus.ModelServiceConfiguration
 }
 
-// ModelServiceClient defines the interface for model service interactions
-type ModelServiceClient interface {
-	GenerateSolution(ctx context.Context, entry *hephaestus.LogEntryData, config *hephaestus.ModelServiceConfiguration) (*hephaestus.ProposedSolution, error)
-}
-
-// NewService creates a new instance of the model service
-func NewService(client ModelServiceClient, metricsCollector hephaestus.MetricsCollectionService) *Service {
+// NewService creates a new model service instance
+func NewService(client ModelServiceClient, metrics hephaestus.MetricsCollectionService) *Service {
 	return &Service{
-		client:           client,
-		metricsCollector: metricsCollector,
+		client:          client,
+		metricsCollector: metrics,
 		sessions:         make(map[string]*ModelSession),
 	}
 }
@@ -65,66 +66,76 @@ func (s *Service) Initialize(ctx context.Context, config *hephaestus.ModelServic
 	return nil
 }
 
-// GenerateSolutionProposal attempts to generate a solution for the given log entry
+// GenerateSolutionProposal generates a solution proposal for a given log entry
 func (s *Service) GenerateSolutionProposal(ctx context.Context, entry *hephaestus.LogEntryData, repo hephaestus.RepositoryManager) (*hephaestus.ProposedSolution, error) {
-	session, err := s.getOrCreateSession(ctx, entry.NodeIdentifier)
-	if err != nil {
-		logger.Error(ctx, "failed to get or create model session",
-			zap.String("node_id", entry.NodeIdentifier),
-			zap.Error(err),
-		)
-		return nil, fmt.Errorf("failed to get or create model session: %v", err)
-	}
+	start := time.Now()
+	logger.Info(ctx, "Generating solution proposal", logger.Field("node_id", entry.NodeIdentifier))
 
-	if !session.IsActive {
-		logger.Error(ctx, "model session is not active",
-			zap.String("node_id", entry.NodeIdentifier),
-		)
-		return nil, fmt.Errorf("model session is not active")
-	}
-
-	startTime := time.Now()
-	logger.Info(ctx, "generating solution",
-		zap.String("node_id", entry.NodeIdentifier),
-		zap.String("log_level", entry.LogLevel),
+	// Generate prompt from log entry
+	prompt := fmt.Sprintf("Log: %s\nLevel: %s\nError: %s\nStack Trace: %s",
+		entry.LogMessage,
+		entry.LogLevel,
+		entry.ErrorTrace,
+		entry.ErrorTrace,
 	)
 
-	solution, err := s.client.GenerateSolution(ctx, entry, s.config)
+	// Call model service
+	solution, err := s.client.GenerateSolution(ctx, prompt)
+	duration := time.Since(start)
+
 	if err != nil {
-		logger.Error(ctx, "failed to generate solution",
-			zap.String("node_id", entry.NodeIdentifier),
-			zap.String("log_level", entry.LogLevel),
-			zap.Error(err),
-		)
+		logger.Error(ctx, "Failed to generate solution", logger.Field("error", err))
+		s.metricsCollector.RecordOperationMetrics("generate_solution", duration, false)
 		s.metricsCollector.RecordErrorMetrics("model_service", err)
 		return nil, fmt.Errorf("failed to generate solution: %v", err)
 	}
 
-	// Record latency metric
-	latency := time.Since(startTime)
-	s.metricsCollector.RecordOperationMetrics("generate_solution", latency, true)
-
-	logger.Info(ctx, "solution generated successfully",
-		zap.String("node_id", entry.NodeIdentifier),
-		zap.String("log_level", entry.LogLevel),
-		zap.Duration("duration", latency),
-	)
-
-	return solution, nil
-}
-
-// ValidateSolutionProposal validates a generated solution
-func (s *Service) ValidateSolutionProposal(ctx context.Context, solution *hephaestus.ProposedSolution) error {
-	if solution == nil {
-		return fmt.Errorf("solution cannot be nil")
+	// Create solution proposal
+	proposal := &hephaestus.ProposedSolution{
+		SolutionID:     uuid.New().String(),
+		NodeIdentifier: entry.NodeIdentifier,
+		AssociatedLog:  entry,
+		ProposedChanges: solution,
+		GenerationTime: time.Now(),
+		ConfidenceScore: 0.8, // TODO: Implement confidence scoring
 	}
 
-	logger.Info(ctx, "validating solution proposal",
-		zap.String("node_id", solution.NodeIdentifier),
-		zap.Float64("confidence", solution.ConfidenceScore),
-	)
+	s.metricsCollector.RecordOperationMetrics("generate_solution", duration, true)
+	logger.Info(ctx, "Generated solution proposal", logger.Field("solution_id", proposal.SolutionID))
 
-	// Add validation logic here
+	return proposal, nil
+}
+
+// ValidateSolutionProposal validates a generated solution proposal
+func (s *Service) ValidateSolutionProposal(ctx context.Context, solution *hephaestus.ProposedSolution) error {
+	start := time.Now()
+	logger.Info(ctx, "Validating solution proposal", logger.Field("solution_id", solution.SolutionID))
+
+	// Generate validation prompt
+	prompt := fmt.Sprintf("Validate solution:\n%s", solution.ProposedChanges)
+
+	// Call model service for validation
+	result, err := s.client.GenerateSolution(ctx, prompt)
+	duration := time.Since(start)
+
+	if err != nil {
+		logger.Error(ctx, "Failed to validate solution", logger.Field("error", err))
+		s.metricsCollector.RecordOperationMetrics("validate_solution", duration, false)
+		s.metricsCollector.RecordErrorMetrics("model_service", err)
+		return fmt.Errorf("failed to validate solution: %v", err)
+	}
+
+	// Check validation result
+	if result != "valid" {
+		err := fmt.Errorf("solution validation failed: %s", result)
+		s.metricsCollector.RecordOperationMetrics("validate_solution", duration, false)
+		s.metricsCollector.RecordErrorMetrics("model_service", err)
+		return err
+	}
+
+	s.metricsCollector.RecordOperationMetrics("validate_solution", duration, true)
+	logger.Info(ctx, "Solution proposal validated", logger.Field("solution_id", solution.SolutionID))
+
 	return nil
 }
 
