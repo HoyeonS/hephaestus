@@ -1,0 +1,16 @@
+log_level: info
+log_output: stdout
+node_id: test-node
+
+repository:
+  owner: HoyeonS
+  name: hephaestus
+  token: test-token
+  base_path: /base/path
+  branch: main
+
+model:
+  version: v1
+  api_key: test-key
+  base_url: https://api.example.com
+  timeout: invalid # Invalid timeout value 
