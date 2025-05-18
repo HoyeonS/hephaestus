@@ -343,7 +343,7 @@ func SystemConfigurationFactory(config *hephaestus.Config, operationalMode strin
 		// Set Repository settings
 		RepositorySettings: hephaestus.RepositoryConfiguration{
 			RepositoryPath: config.Repository.BasePath,
-			FileLimit:      10000,  // Default value
+			FileLimit:      10000,   // Default value
 			FileSizeLimit:  1 << 20, // Default 1MB
 		},
 		OperationalMode: operationalMode,
