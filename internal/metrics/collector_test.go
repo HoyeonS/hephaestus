@@ -129,7 +129,7 @@ func TestCleanupNodeMetrics(t *testing.T) {
 }
 
 func TestRecordOperationMetrics(t *testing.T) {
-	collector, ctx := setupTest(t)
+	collector, _ := setupTest(t)
 
 	// Test recording operation metrics
 	collector.RecordOperationMetrics("test_operation", time.Second, true)
@@ -137,7 +137,7 @@ func TestRecordOperationMetrics(t *testing.T) {
 }
 
 func TestRecordErrorMetrics(t *testing.T) {
-	collector, ctx := setupTest(t)
+	collector, _ := setupTest(t)
 
 	// Test recording error metrics
 	collector.RecordErrorMetrics("test_component", assert.AnError)
