@@ -21,7 +21,7 @@ func TestInitialize(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "valid debug level",
+			name: "valid debug level and json format",
 			config: Config{
 				Level:  "debug",
 				Format: "json",
@@ -29,7 +29,7 @@ func TestInitialize(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid info level",
+			name: "valid info level and console format",
 			config: Config{
 				Level:  "info",
 				Format: "console",
@@ -37,7 +37,7 @@ func TestInitialize(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "invalid level",
+			name: "invalid log level",
 			config: Config{
 				Level:  "invalid",
 				Format: "json",
@@ -45,11 +45,19 @@ func TestInitialize(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "with output file",
+			name: "default format when invalid",
+			config: Config{
+				Level:  "info",
+				Format: "invalid",
+			},
+			wantErr: false,
+		},
+		{
+			name: "with output paths",
 			config: Config{
 				Level:       "info",
 				Format:     "json",
-				OutputPaths: []string{"test.log"},
+				OutputPaths: []string{"stdout", "stderr", "test.log"},
 			},
 			wantErr: false,
 		},
@@ -59,7 +67,6 @@ func TestInitialize(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Reset global logger before each test
 			globalLogger = nil
-			once = sync.Once{}
 
 			err := Initialize(tt.config)
 			if tt.wantErr {
@@ -73,7 +80,7 @@ func TestInitialize(t *testing.T) {
 			if len(tt.config.OutputPaths) > 0 {
 				for _, path := range tt.config.OutputPaths {
 					if path != "stdout" && path != "stderr" {
-						os.Remove(path)
+						_ = os.Remove(path)
 					}
 				}
 			}
@@ -82,32 +89,37 @@ func TestInitialize(t *testing.T) {
 }
 
 func TestWithContext(t *testing.T) {
-	// Initialize logger
+	// Initialize logger for tests
 	err := Initialize(Config{
-		Level:  "info",
+		Level:  "debug",
 		Format: "json",
 	})
 	require.NoError(t, err)
 
 	tests := []struct {
-		name    string
-		ctx     context.Context
-		wantID  string
+		name     string
+		ctx      context.Context
+		wantID   string
+		wantNil  bool
+		wantNoop bool
 	}{
 		{
 			name:    "context with trace ID",
 			ctx:     context.WithValue(context.Background(), "trace_id", "test-trace-id"),
 			wantID:  "test-trace-id",
+			wantNil: false,
 		},
 		{
 			name:    "context without trace ID",
 			ctx:     context.Background(),
 			wantID:  "",
+			wantNil: false,
 		},
 		{
 			name:    "nil context",
 			ctx:     nil,
 			wantID:  "",
+			wantNil: false,
 		},
 	}
 
@@ -117,6 +129,56 @@ func TestWithContext(t *testing.T) {
 			assert.NotNil(t, logger)
 		})
 	}
+}
+
+func TestLoggingMethods(t *testing.T) {
+	// Initialize logger for tests
+	err := Initialize(Config{
+		Level:  "debug",
+		Format: "json",
+	})
+	require.NoError(t, err)
+
+	ctx := context.WithValue(context.Background(), "trace_id", "test-trace-id")
+	fields := []zapcore.Field{
+		zap.String("key", "value"),
+		zap.Int("count", 42),
+	}
+
+	t.Run("debug logging", func(t *testing.T) {
+		Debug(ctx, "debug message", fields...)
+	})
+
+	t.Run("info logging", func(t *testing.T) {
+		Info(ctx, "info message", fields...)
+	})
+
+	t.Run("warn logging", func(t *testing.T) {
+		Warn(ctx, "warn message", fields...)
+	})
+
+	t.Run("error logging", func(t *testing.T) {
+		Error(ctx, "error message", fields...)
+	})
+}
+
+func TestSync(t *testing.T) {
+	t.Run("sync with initialized logger", func(t *testing.T) {
+		err := Initialize(Config{
+			Level:  "debug",
+			Format: "json",
+		})
+		require.NoError(t, err)
+
+		err = Sync()
+		assert.NoError(t, err)
+	})
+
+	t.Run("sync with nil logger", func(t *testing.T) {
+		globalLogger = nil
+		err := Sync()
+		assert.NoError(t, err)
+	})
 }
 
 func TestLogging(t *testing.T) {

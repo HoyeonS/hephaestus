@@ -76,6 +76,13 @@ func (s *Service) GenerateSolutionProposal(ctx context.Context, entry *hephaestu
 		return nil, fmt.Errorf("failed to get or create model session: %v", err)
 	}
 
+	if !session.IsActive {
+		logger.Error(ctx, "model session is not active",
+			zap.String("node_id", entry.NodeIdentifier),
+		)
+		return nil, fmt.Errorf("model session is not active")
+	}
+
 	startTime := time.Now()
 	logger.Info(ctx, "generating solution",
 		zap.String("node_id", entry.NodeIdentifier),
@@ -89,18 +96,13 @@ func (s *Service) GenerateSolutionProposal(ctx context.Context, entry *hephaestu
 			zap.String("log_level", entry.LogLevel),
 			zap.Error(err),
 		)
+		s.metricsCollector.RecordErrorMetrics("model_service", err)
 		return nil, fmt.Errorf("failed to generate solution: %v", err)
 	}
 
 	// Record latency metric
 	latency := time.Since(startTime)
-	if err := s.metricsCollector.RecordOperationMetrics("generate_solution", latency, true); err != nil {
-		logger.Warn(ctx, "failed to record model latency metric",
-			zap.String("node_id", entry.NodeIdentifier),
-			zap.Duration("latency", latency),
-			zap.Error(err),
-		)
-	}
+	s.metricsCollector.RecordOperationMetrics("generate_solution", latency, true)
 
 	logger.Info(ctx, "solution generated successfully",
 		zap.String("node_id", entry.NodeIdentifier),

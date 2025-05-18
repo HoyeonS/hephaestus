@@ -3,6 +3,8 @@ package log
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -112,9 +114,10 @@ func TestProcessLogs(t *testing.T) {
 	}
 	processor.CreateStream(ctx, nodeID)
 
-	t.Run("Process JSON logs", func(t *testing.T) {
+	t.Run("Process JSON logs with timestamps", func(t *testing.T) {
+		now := time.Now()
 		logEntry := LogEntry{
-			Timestamp: time.Now(),
+			Timestamp: now,
 			Level:     "error",
 			Message:   "test error",
 			Context:   map[string]interface{}{"key": "value"},
@@ -129,6 +132,8 @@ func TestProcessLogs(t *testing.T) {
 		assert.Equal(t, logEntry.Message, stream.Buffer[0].Message)
 		assert.Equal(t, logEntry.Level, stream.Buffer[0].Level)
 		assert.Equal(t, logEntry.Context, stream.Buffer[0].Context)
+		assert.Equal(t, now.Unix(), stream.Buffer[0].Timestamp.Unix())
+		assert.WithinDuration(t, time.Now(), stream.Buffer[0].ProcessedAt, time.Second)
 	})
 
 	t.Run("Process text logs", func(t *testing.T) {
@@ -168,6 +173,32 @@ func TestProcessLogs(t *testing.T) {
 		assert.NoError(t, err)
 		initialLength := len(processor.streams[nodeID].Buffer)
 		assert.Equal(t, initialLength, len(processor.streams[nodeID].Buffer))
+	})
+
+	t.Run("Process logs with different levels", func(t *testing.T) {
+		processor.streams[nodeID].LogLevel = "info"
+		processor.streams[nodeID].IsActive = true
+		processor.streams[nodeID].Buffer = make([]LogEntry, 0)
+
+		logs := []string{
+			`{"level": "debug", "message": "debug log"}`,
+			`{"level": "info", "message": "info log"}`,
+			`{"level": "warn", "message": "warn log"}`,
+			`{"level": "error", "message": "error log"}`,
+			`{"level": "fatal", "message": "fatal log"}`,
+		}
+
+		err := processor.ProcessLogs(ctx, nodeID, logs)
+		assert.NoError(t, err)
+
+		stream := processor.streams[nodeID]
+		assert.Len(t, stream.Buffer, 4) // debug should be filtered out
+		
+		// Verify messages are in order
+		assert.Equal(t, "info log", stream.Buffer[0].Message)
+		assert.Equal(t, "warn log", stream.Buffer[1].Message)
+		assert.Equal(t, "error log", stream.Buffer[2].Message)
+		assert.Equal(t, "fatal log", stream.Buffer[3].Message)
 	})
 }
 
@@ -319,4 +350,93 @@ func TestLogLevelThreshold(t *testing.T) {
 			assert.Equal(t, tc.expected, result)
 		})
 	}
+}
+
+func TestConcurrentAccess(t *testing.T) {
+	processor := NewProcessor()
+	ctx := context.Background()
+
+	// Initialize processor
+	processor.config = &hephaestus.LoggingConfiguration{
+		LogLevel:     "info",
+		OutputFormat: "json",
+	}
+
+	// Test concurrent stream creation
+	t.Run("Concurrent stream creation", func(t *testing.T) {
+		var wg sync.WaitGroup
+		numGoroutines := 10
+
+		for i := 0; i < numGoroutines; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				nodeID := fmt.Sprintf("node-%d", id)
+				err := processor.CreateStream(ctx, nodeID)
+				assert.NoError(t, err)
+			}(i)
+		}
+
+		wg.Wait()
+		assert.Len(t, processor.streams, numGoroutines)
+	})
+
+	// Test concurrent log processing
+	t.Run("Concurrent log processing", func(t *testing.T) {
+		nodeID := "concurrent-test-node"
+		processor.CreateStream(ctx, nodeID)
+
+		var wg sync.WaitGroup
+		numGoroutines := 10
+		logsPerGoroutine := 100
+
+		for i := 0; i < numGoroutines; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				logs := make([]string, logsPerGoroutine)
+				for j := 0; j < logsPerGoroutine; j++ {
+					logs[j] = fmt.Sprintf(`{"level": "info", "message": "log-%d-%d"}`, id, j)
+				}
+				err := processor.ProcessLogs(ctx, nodeID, logs)
+				assert.NoError(t, err)
+			}(i)
+		}
+
+		wg.Wait()
+		logs, err := processor.GetProcessedLogs(ctx, nodeID)
+		assert.NoError(t, err)
+		assert.Len(t, logs, numGoroutines*logsPerGoroutine)
+	})
+
+	// Test concurrent cleanup
+	t.Run("Concurrent cleanup", func(t *testing.T) {
+		var wg sync.WaitGroup
+		numGoroutines := 10
+
+		// Create streams first
+		for i := 0; i < numGoroutines; i++ {
+			nodeID := fmt.Sprintf("cleanup-node-%d", i)
+			processor.CreateStream(ctx, nodeID)
+		}
+
+		// Concurrently clean up streams
+		for i := 0; i < numGoroutines; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				nodeID := fmt.Sprintf("cleanup-node-%d", id)
+				err := processor.Cleanup(ctx, nodeID)
+				assert.NoError(t, err)
+			}(i)
+		}
+
+		wg.Wait()
+		// Verify all streams were cleaned up
+		for i := 0; i < numGoroutines; i++ {
+			nodeID := fmt.Sprintf("cleanup-node-%d", i)
+			_, exists := processor.streams[nodeID]
+			assert.False(t, exists)
+		}
+	})
 }

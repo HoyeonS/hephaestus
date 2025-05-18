@@ -25,7 +25,7 @@ func TestInitialize(t *testing.T) {
 	}{
 		{
 			name:    "successful initialization",
-			setup:   func() { prometheus.Unregister(prometheus.DefaultRegisterer) },
+			setup:   func() { prometheus.Unregister(prometheus.NewRegistry()) },
 			wantErr: false,
 		},
 		{
