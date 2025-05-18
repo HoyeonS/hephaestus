@@ -82,7 +82,7 @@ func LoadConfigFromEnvironment() *hephaestus.SystemConfiguration {
 			AuthToken:       os.Getenv("HEPHAESTUS_REMOTE_TOKEN"),
 			RepositoryOwner: os.Getenv("HEPHAESTUS_REMOTE_OWNER"),
 			RepositoryName:  os.Getenv("HEPHAESTUS_REMOTE_REPO"),
-			TargetBranch:   os.Getenv("HEPHAESTUS_REMOTE_BRANCH"),
+			TargetBranch:    os.Getenv("HEPHAESTUS_REMOTE_BRANCH"),
 		},
 		ModelSettings: hephaestus.ModelServiceConfiguration{
 			ServiceProvider: os.Getenv("HEPHAESTUS_MODEL_PROVIDER"),
@@ -220,20 +220,16 @@ func ValidateConfig(config *hephaestus.Config) error {
 		return fmt.Errorf("config cannot be nil")
 	}
 
-	if config.LogLevel == "" {
-		return fmt.Errorf("log level is required")
-	}
-
-	if config.NodeID == "" {
-		return fmt.Errorf("node ID is required")
-	}
-
 	if err := validateRepositoryConfig(config.Repository); err != nil {
 		return fmt.Errorf("invalid repository configuration: %v", err)
 	}
 
 	if err := validateModelConfig(config.Model); err != nil {
 		return fmt.Errorf("invalid model configuration: %v", err)
+	}
+
+	if err := validateLogConfig(config.Log); err != nil {
+		return fmt.Errorf("invalid log configuration: %v", err)
 	}
 
 	return nil
@@ -245,12 +241,12 @@ func validateRepositoryConfig(config *hephaestus.RepositoryConfig) error {
 		return fmt.Errorf("repository configuration is required")
 	}
 
-	if config.Owner == "" {
-		return fmt.Errorf("repository owner is required")
+	if config.Type == "" {
+		return fmt.Errorf("repository type is required")
 	}
 
-	if config.Name == "" {
-		return fmt.Errorf("repository name is required")
+	if config.URL == "" {
+		return fmt.Errorf("repository url is not found")
 	}
 
 	if config.Token == "" {
@@ -259,6 +255,10 @@ func validateRepositoryConfig(config *hephaestus.RepositoryConfig) error {
 
 	if config.Branch == "" {
 		return fmt.Errorf("repository branch is required")
+	}
+
+	if config.BasePath == "" {
+		return fmt.Errorf("base path is not found")
 	}
 
 	return nil
@@ -270,20 +270,33 @@ func validateModelConfig(config *hephaestus.ModelConfig) error {
 		return fmt.Errorf("model configuration is required")
 	}
 
-	if config.Version == "" {
-		return fmt.Errorf("model version is required")
+	if config.Provider == "" {
+		return fmt.Errorf("model provider is required")
 	}
 
 	if config.APIKey == "" {
 		return fmt.Errorf("model API key is required")
 	}
 
-	if config.BaseURL == "" {
-		return fmt.Errorf("model base URL is required")
+	if config.Model == "" {
+		return fmt.Errorf("model specification is not found")
 	}
 
-	if config.Timeout <= 0 {
-		return fmt.Errorf("model timeout must be greater than 0")
+	return nil
+}
+
+// validateModelConfig validates the model configuration
+func validateLogConfig(config *hephaestus.LogConfig) error {
+	if config == nil {
+		return fmt.Errorf("log configuration is required")
+	}
+
+	if config.Level == "" {
+		return fmt.Errorf("log level threshold is required")
+	}
+
+	if config.Output == "" {
+		return fmt.Errorf("log output format is required")
 	}
 
 	return nil
