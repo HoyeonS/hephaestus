@@ -113,6 +113,24 @@ type RepositoryManager interface {
 	CreatePullRequest(ctx context.Context, title, body, head, base string) (string, error)
 }
 
+// NodeManager defines the interface for managing nodes
+type NodeManager interface {
+	Initialize(ctx context.Context) error
+	RegisterNode(ctx context.Context, node *SystemNode) error
+	UpdateNodeStatus(ctx context.Context, nodeID string, status NodeStatus) error
+	GetNode(ctx context.Context, nodeID string) (*SystemNode, error)
+	ListNodes(ctx context.Context) ([]*SystemNode, error)
+	RemoveNode(ctx context.Context, nodeID string) error
+}
+
+// ModelService defines the interface for model operations
+type ModelService interface {
+	Initialize(ctx context.Context) error
+	ProcessLogEntry(ctx context.Context, entry *LogEntryData) error
+	GenerateSolutionProposal(ctx context.Context, entry *LogEntryData) (*ProposedSolution, error)
+	ValidateSolutionProposal(ctx context.Context, solution *ProposedSolution) error
+}
+
 // NodeOperationalStatus represents the current operational state of a node
 type NodeOperationalStatus string
 
