@@ -3,225 +3,148 @@ package server
 import (
 	"context"
 	"fmt"
-	"sync"
+	"net"
 
-	"github.com/HoyeonS/hephaestus/internal/config"
+	"github.com/HoyeonS/hephaestus/internal/logger"
 	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
-	pb "github.com/HoyeonS/hephaestus/pkg/proto"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	pb "github.com/HoyeonS/hephaestus/proto"
+	"google.golang.org/grpc"
 )
 
-// HephaestusServer implements the HephaestusService gRPC interface
-type HephaestusServer struct {
+// Server implements the HephaestusService gRPC server
+type Server struct {
 	pb.UnimplementedHephaestusServiceServer
-	
-	// Dependencies
-	nodeManager          hephaestus.NodeLifecycleManager
-	logProcessor        hephaestus.LogProcessingService
-	modelService        hephaestus.ModelServiceProvider
-	remoteRepoService   hephaestus.RemoteRepositoryService
-	metricsCollector    hephaestus.MetricsCollectionService
-	
-	// Node registry
-	nodes     map[string]*hephaestus.SystemNode
-	nodesMutex sync.RWMutex
+	nodeManager      hephaestus.NodeManager
+	modelService     hephaestus.ModelService
+	metricsCollector hephaestus.MetricsCollectionService
 }
 
-// NewHephaestusServer creates a new instance of the Hephaestus server
-func NewHephaestusServer(
-	nodeManager hephaestus.NodeLifecycleManager,
-	logProcessor hephaestus.LogProcessingService,
-	modelService hephaestus.ModelServiceProvider,
-	remoteRepoService hephaestus.RemoteRepositoryService,
-	metricsCollector hephaestus.MetricsCollectionService,
-) *HephaestusServer {
-	return &HephaestusServer{
-		nodeManager:        nodeManager,
-		logProcessor:      logProcessor,
-		modelService:      modelService,
-		remoteRepoService: remoteRepoService,
-		metricsCollector:  metricsCollector,
-		nodes:            make(map[string]*hephaestus.SystemNode),
+// NewServer creates a new instance of the HephaestusService server
+func NewServer(nodeManager hephaestus.NodeManager, modelService hephaestus.ModelService, metricsCollector hephaestus.MetricsCollectionService) *Server {
+	return &Server{
+		nodeManager:      nodeManager,
+		modelService:     modelService,
+		metricsCollector: metricsCollector,
 	}
 }
 
-// InitializeNode initializes a new node with the provided configuration
-func (s *HephaestusServer) InitializeNode(ctx context.Context, req *pb.InitializeNodeRequest) (*pb.InitializeNodeResponse, error) {
-	if req.Configuration == nil {
-		return nil, status.Error(codes.InvalidArgument, "configuration is required")
-	}
-
-	// Convert proto configuration to internal configuration
-	config := &hephaestus.SystemConfiguration{
-		RemoteSettings:    convertRemoteConfig(req.Configuration.RemoteSettings),
-		ModelSettings:     convertModelConfig(req.Configuration.ModelSettings),
-		LoggingSettings:   convertLoggingConfig(req.Configuration.LoggingSettings),
-		OperationalMode:   req.Configuration.OperationalMode,
-		RepositorySettings: convertRepoConfig(req.Configuration.RepositorySettings),
-	}
-
-	// Create new node
-	node, err := s.nodeManager.CreateSystemNode(ctx, config)
+// Start starts the gRPC server
+func (s *Server) Start(address string) error {
+	listener, err := net.Listen("tcp", address)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to create node: %v", err)
+		return fmt.Errorf("failed to listen: %v", err)
 	}
 
-	// Store node in registry
-	s.nodesMutex.Lock()
-	s.nodes[node.NodeIdentifier] = node
-	s.nodesMutex.Unlock()
+	server := grpc.NewServer()
+	pb.RegisterHephaestusServiceServer(server, s)
 
-	return &pb.InitializeNodeResponse{
-		NodeIdentifier:    node.NodeIdentifier,
-		OperationalStatus: string(node.CurrentStatus),
-		StatusMessage:     "Node initialized successfully",
+	logger.Info(context.Background(), "Starting gRPC server", logger.Field("address", address))
+	if err := server.Serve(listener); err != nil {
+		return fmt.Errorf("failed to serve: %v", err)
+	}
+
+	return nil
+}
+
+// RegisterNode registers a new node with the system
+func (s *Server) RegisterNode(ctx context.Context, req *pb.RegisterNodeRequest) (*pb.RegisterNodeResponse, error) {
+	logger.Info(ctx, "Registering node", logger.Field("node_id", req.NodeId))
+
+	node := &hephaestus.SystemNode{
+		NodeID: req.NodeId,
+	}
+
+	if err := s.nodeManager.RegisterNode(ctx, node); err != nil {
+		logger.Error(ctx, "Failed to register node", logger.Field("error", err))
+		return &pb.RegisterNodeResponse{
+			Status: "error",
+			Error:  err.Error(),
+		}, nil
+	}
+
+	return &pb.RegisterNodeResponse{
+		Status: "success",
 	}, nil
 }
 
-// GetNodeStatus retrieves the current status of a node
-func (s *HephaestusServer) GetNodeStatus(ctx context.Context, req *pb.NodeStatusRequest) (*pb.NodeStatusResponse, error) {
-	s.nodesMutex.RLock()
-	node, exists := s.nodes[req.NodeIdentifier]
-	s.nodesMutex.RUnlock()
+// ProcessLogEntry processes a log entry from a node
+func (s *Server) ProcessLogEntry(ctx context.Context, req *pb.ProcessLogEntryRequest) (*pb.ProcessLogEntryResponse, error) {
+	logger.Info(ctx, "Processing log entry", logger.Field("node_id", req.LogEntry.NodeId))
 
-	if !exists {
-		return nil, status.Errorf(codes.NotFound, "node not found: %s", req.NodeIdentifier)
+	logEntry := &hephaestus.LogEntryData{
+		NodeIdentifier: req.LogEntry.NodeId,
+		LogMessage:     req.LogEntry.Message,
+		LogLevel:       req.LogEntry.LogLevel,
+		ErrorTrace:     req.LogEntry.ErrorTrace,
+		Timestamp:      req.LogEntry.Timestamp.AsTime(),
 	}
 
-	return &pb.NodeStatusResponse{
-		NodeIdentifier:       node.NodeIdentifier,
-		OperationalStatus:    string(node.CurrentStatus),
-		CurrentConfiguration: convertConfigToProto(node.NodeConfig),
-		StatusMessage:        "Node status retrieved successfully",
+	if err := s.modelService.ProcessLogEntry(ctx, logEntry); err != nil {
+		logger.Error(ctx, "Failed to process log entry", logger.Field("error", err))
+		return &pb.ProcessLogEntryResponse{
+			Status: "error",
+			Error:  err.Error(),
+		}, nil
+	}
+
+	return &pb.ProcessLogEntryResponse{
+		Status: "success",
 	}, nil
 }
 
-// UpdateNodeConfiguration updates the configuration of an existing node
-func (s *HephaestusServer) UpdateNodeConfiguration(ctx context.Context, req *pb.UpdateNodeConfigurationRequest) (*pb.UpdateNodeConfigurationResponse, error) {
-	s.nodesMutex.Lock()
-	defer s.nodesMutex.Unlock()
+// GetSolutionProposal generates a solution proposal for a log entry
+func (s *Server) GetSolutionProposal(ctx context.Context, req *pb.GetSolutionProposalRequest) (*pb.GetSolutionProposalResponse, error) {
+	logger.Info(ctx, "Generating solution proposal", logger.Field("node_id", req.NodeId))
 
-	node, exists := s.nodes[req.NodeIdentifier]
-	if !exists {
-		return nil, status.Errorf(codes.NotFound, "node not found: %s", req.NodeIdentifier)
+	logEntry := &hephaestus.LogEntryData{
+		NodeIdentifier: req.LogEntry.NodeId,
+		LogMessage:     req.LogEntry.Message,
+		LogLevel:       req.LogEntry.LogLevel,
+		ErrorTrace:     req.LogEntry.ErrorTrace,
+		Timestamp:      req.LogEntry.Timestamp.AsTime(),
 	}
 
-	// Convert and validate new configuration
-	newConfig := &hephaestus.SystemConfiguration{
-		RemoteSettings:    convertRemoteConfig(req.NewConfiguration.RemoteSettings),
-		ModelSettings:     convertModelConfig(req.NewConfiguration.ModelSettings),
-		LoggingSettings:   convertLoggingConfig(req.NewConfiguration.LoggingSettings),
-		OperationalMode:   req.NewConfiguration.OperationalMode,
-		RepositorySettings: convertRepoConfig(req.NewConfiguration.RepositorySettings),
+	solution, err := s.modelService.GenerateSolutionProposal(ctx, logEntry)
+	if err != nil {
+		logger.Error(ctx, "Failed to generate solution proposal", logger.Field("error", err))
+		return &pb.GetSolutionProposalResponse{
+			Error: err.Error(),
+		}, nil
 	}
 
-	// Update node configuration
-	if err := s.nodeManager.UpdateNodeOperationalStatus(ctx, node.NodeIdentifier, hephaestus.NodeStatusInitializing); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to update node status: %v", err)
-	}
-
-	node.NodeConfig = newConfig
-	node.CurrentStatus = hephaestus.NodeStatusOperational
-
-	return &pb.UpdateNodeConfigurationResponse{
-		NodeIdentifier: node.NodeIdentifier,
-		StatusMessage:  "Configuration updated successfully",
-		Success:       true,
+	return &pb.GetSolutionProposalResponse{
+		Solution: &pb.SolutionProposal{
+			SolutionId:      solution.SolutionID,
+			NodeId:          solution.NodeIdentifier,
+			AssociatedLog:   req.LogEntry,
+			ProposedChanges: solution.ProposedChanges,
+			GenerationTime:  solution.GenerationTime.AsTime(),
+			ConfidenceScore: solution.ConfidenceScore,
+		},
 	}, nil
 }
 
-// DeleteNode removes a node from the system
-func (s *HephaestusServer) DeleteNode(ctx context.Context, req *pb.DeleteNodeRequest) (*pb.DeleteNodeResponse, error) {
-	s.nodesMutex.Lock()
-	defer s.nodesMutex.Unlock()
+// ValidateSolution validates a solution proposal
+func (s *Server) ValidateSolution(ctx context.Context, req *pb.ValidateSolutionRequest) (*pb.ValidateSolutionResponse, error) {
+	logger.Info(ctx, "Validating solution", logger.Field("solution_id", req.Solution.SolutionId))
 
-	if _, exists := s.nodes[req.NodeIdentifier]; !exists {
-		return nil, status.Errorf(codes.NotFound, "node not found: %s", req.NodeIdentifier)
+	solution := &hephaestus.ProposedSolution{
+		SolutionID:      req.Solution.SolutionId,
+		NodeIdentifier:  req.Solution.NodeId,
+		ProposedChanges: req.Solution.ProposedChanges,
+		GenerationTime:  req.Solution.GenerationTime.AsTime(),
+		ConfidenceScore: req.Solution.ConfidenceScore,
 	}
 
-	if err := s.nodeManager.DeleteSystemNode(ctx, req.NodeIdentifier); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to delete node: %v", err)
+	if err := s.modelService.ValidateSolutionProposal(ctx, solution); err != nil {
+		logger.Error(ctx, "Failed to validate solution", logger.Field("error", err))
+		return &pb.ValidateSolutionResponse{
+			IsValid: false,
+			Error:   err.Error(),
+		}, nil
 	}
 
-	delete(s.nodes, req.NodeIdentifier)
-
-	return &pb.DeleteNodeResponse{
-		StatusMessage: "Node deleted successfully",
-		Success:      true,
+	return &pb.ValidateSolutionResponse{
+		IsValid: true,
 	}, nil
-}
-
-// Helper functions for configuration conversion
-func convertRemoteConfig(config *pb.RemoteRepositoryConfiguration) hephaestus.RemoteRepositoryConfiguration {
-	if config == nil {
-		return hephaestus.RemoteRepositoryConfiguration{}
-	}
-	return hephaestus.RemoteRepositoryConfiguration{
-		AuthToken:       config.AuthToken,
-		RepositoryOwner: config.RepositoryOwner,
-		RepositoryName:  config.RepositoryName,
-		TargetBranch:    config.TargetBranch,
-	}
-}
-
-func convertModelConfig(config *pb.ModelServiceConfiguration) hephaestus.ModelServiceConfiguration {
-	if config == nil {
-		return hephaestus.ModelServiceConfiguration{}
-	}
-	return hephaestus.ModelServiceConfiguration{
-		ServiceProvider: config.ServiceProvider,
-		ServiceAPIKey:   config.ServiceApiKey,
-		ModelVersion:    config.ModelVersion,
-	}
-}
-
-func convertLoggingConfig(config *pb.LoggingConfiguration) hephaestus.LoggingConfiguration {
-	if config == nil {
-		return hephaestus.LoggingConfiguration{}
-	}
-	return hephaestus.LoggingConfiguration{
-		LogLevel:     config.LogLevel,
-		OutputFormat: config.OutputFormat,
-	}
-}
-
-func convertRepoConfig(config *pb.RepositoryConfiguration) hephaestus.RepositoryConfiguration {
-	if config == nil {
-		return hephaestus.RepositoryConfiguration{}
-	}
-	return hephaestus.RepositoryConfiguration{
-		RepositoryPath: config.RepositoryPath,
-		FileLimit:      int(config.FileLimit),
-		FileSizeLimit:  config.FileSizeLimit,
-	}
-}
-
-func convertConfigToProto(config *hephaestus.SystemConfiguration) *pb.SystemConfiguration {
-	if config == nil {
-		return nil
-	}
-	return &pb.SystemConfiguration{
-		RemoteSettings: &pb.RemoteRepositoryConfiguration{
-			AuthToken:       config.RemoteSettings.AuthToken,
-			RepositoryOwner: config.RemoteSettings.RepositoryOwner,
-			RepositoryName:  config.RemoteSettings.RepositoryName,
-			TargetBranch:    config.RemoteSettings.TargetBranch,
-		},
-		ModelSettings: &pb.ModelServiceConfiguration{
-			ServiceProvider: config.ModelSettings.ServiceProvider,
-			ServiceApiKey:   config.ModelSettings.ServiceAPIKey,
-			ModelVersion:    config.ModelSettings.ModelVersion,
-		},
-		LoggingSettings: &pb.LoggingConfiguration{
-			LogLevel:     config.LoggingSettings.LogLevel,
-			OutputFormat: config.LoggingSettings.OutputFormat,
-		},
-		OperationalMode: config.OperationalMode,
-		RepositorySettings: &pb.RepositoryConfiguration{
-			RepositoryPath: config.RepositorySettings.RepositoryPath,
-			FileLimit:      int32(config.RepositorySettings.FileLimit),
-			FileSizeLimit:  config.RepositorySettings.FileSizeLimit,
-		},
-	}
 }
