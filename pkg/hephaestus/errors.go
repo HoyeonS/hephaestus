@@ -42,6 +42,15 @@ var (
 
 	// ErrMetricsError indicates a metrics collection error
 	ErrMetricsError = errors.New("metrics error")
+
+	// ErrNodeNotFound indicates a node is not found in client code
+	ErrNodeNotFound = errors.New("node not found error")
+
+	// ErrFileNotFound indicates a file node is not found in system
+	ErrFileNotFound = errors.New("file node is not found error")
+
+	// ErrOperationTimeout indicates operation is timed out
+	ErrOperationTimeout = errors.New("operation timed out error")
 )
 
 // ModelError represents a model provider error
@@ -200,4 +209,4 @@ func IsExternalError(err error) bool {
 	var aiErr *AIError
 	var githubErr *GitHubError
 	return errors.As(err, &aiErr) || errors.As(err, &githubErr)
-} 
+}
