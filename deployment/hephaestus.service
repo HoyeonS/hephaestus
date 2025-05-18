@@ -1,0 +1,41 @@
+[Unit]
+Description=Hephaestus Server
+Documentation=https://github.com/HoyeonS/hephaestus
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=hephaestus
+Group=hephaestus
+EnvironmentFile=/etc/hephaestus/env
+WorkingDirectory=/opt/hephaestus
+ExecStart=/usr/local/bin/hephaestus
+Restart=always
+RestartSec=5
+StartLimitInterval=0
+StartLimitBurst=5
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+# Resource limits
+LimitNOFILE=65535
+LimitNPROC=4096
+MemoryLimit=2G
+CPUQuota=200%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hephaestus
+
+[Install]
+WantedBy=multi-user.target 

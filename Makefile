@@ -1,4 +1,4 @@
-.PHONY: all build test clean lint tools init generate docs
+# Makefile for Hephaestus project
 
 # Go parameters
 GOCMD=go
@@ -8,111 +8,142 @@ GOTEST=$(GOCMD) test
 GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 BINARY_NAME=hephaestus
+VERSION ?= $(shell git describe --tags --always --dirty)
 
-# Build parameters
-BUILD_DIR=build
-MAIN_PACKAGE=./cmd/init
+# Test parameters
+COVERAGE_THRESHOLD=80
+COVERAGE_FILE=coverage.out
+COVERAGE_HTML=coverage.html
 
-all: test build
+# Protobuf parameters
+PROTOC=protoc
+PROTO_DIR=proto
+PROTO_GO_OUT=pkg/proto
 
-build:
-	mkdir -p $(BUILD_DIR)
-	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PACKAGE)
+# Docker parameters
+DOCKER=docker
+DOCKER_IMAGE=hephaestus
+DOCKER_TAG=latest
 
-test:
-	$(GOTEST) -v ./...
+# Directories
+CMD_DIR=cmd
+PKG_DIR=pkg
+INTERNAL_DIR=internal
+EXAMPLES_DIR=examples
+TEST_DIR=test
 
-test-race:
-	$(GOTEST) -v -race ./...
+# Build flags
+LDFLAGS=-ldflags "-X main.Version=$(VERSION)"
 
-test-cover:
-	$(GOTEST) -v -coverprofile=coverage.out ./...
-	$(GOCMD) tool cover -html=coverage.out -o coverage.html
+.PHONY: all build clean test coverage deps proto docker-build docker-push run help generate-mocks docs check-coverage
 
-bench:
-	$(GOTEST) -v -bench=. -benchmem ./...
+all: check deps proto test build ## Build everything
 
-clean:
+build: test ## Build the binary
+	$(GOBUILD) -o $(BINARY_NAME) $(LDFLAGS) ./$(CMD_DIR)/server
+
+clean: ## Clean build files
 	$(GOCLEAN)
-	rm -rf $(BUILD_DIR)
-	rm -f coverage.out coverage.html
+	rm -f $(BINARY_NAME)
+	rm -f $(COVERAGE_FILE)
+	rm -f $(COVERAGE_HTML)
 
-lint:
-	golangci-lint run
+test: unit-test integration-test ## Run all tests
 
-tools:
-	$(GOGET) github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	$(GOGET) golang.org/x/tools/cmd/goimports@latest
-	$(GOGET) github.com/golang/mock/mockgen@latest
+unit-test: ## Run unit tests
+	$(GOTEST) -v -race -coverprofile=$(COVERAGE_FILE) ./internal/... ./pkg/...
+	$(GOCMD) tool cover -html=$(COVERAGE_FILE) -o $(COVERAGE_HTML)
+	@echo "Checking test coverage..."
+	@coverage=$$(go tool cover -func=$(COVERAGE_FILE) | grep total | awk '{print $$3}' | sed 's/%//'); \
+	if [ $${coverage%.*} -lt $(COVERAGE_THRESHOLD) ]; then \
+		echo "Test coverage is below $(COVERAGE_THRESHOLD)%. Current coverage: $$coverage%"; \
+		exit 1; \
+	fi
 
-init: tools
-	cp config/config.example.yaml config/config.yaml
-	git config core.hooksPath .githooks
+integration-test: ## Run integration tests
+	$(GOTEST) -v -tags=integration ./test/integration/...
 
-tidy:
+performance-test: ## Run performance tests
+	$(GOTEST) -v -tags=performance ./test/performance/...
+
+check-coverage: ## Check test coverage
+	@go tool cover -func=$(COVERAGE_FILE) | grep total | awk '{print $$3}'
+
+deps: ## Download dependencies
+	$(GOMOD) download
 	$(GOMOD) tidy
 	$(GOMOD) verify
 
-generate:
-	$(GOCMD) generate ./...
+proto: ## Generate Protocol Buffer code
+	mkdir -p $(PROTO_GO_OUT)
+	$(PROTOC) --go_out=$(PROTO_GO_OUT) --go_opt=paths=source_relative \
+		--go-grpc_out=$(PROTO_GO_OUT) --go-grpc_opt=paths=source_relative \
+		$(PROTO_DIR)/*.proto
 
-docs:
-	$(GOCMD) doc -all > docs/api.txt
+docker-build: test ## Build Docker image
+	$(DOCKER) build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
 
-# Development helpers
-fmt:
+docker-push: ## Push Docker image
+	$(DOCKER) push $(DOCKER_IMAGE):$(DOCKER_TAG)
+
+run: ## Run the server
+	$(GOBUILD) -o $(BINARY_NAME) $(LDFLAGS) ./$(CMD_DIR)/server
+	./$(BINARY_NAME)
+
+generate-mocks: ## Generate mock interfaces
+	@for pkg in $$(go list ./internal/... ./pkg/...); do \
+		if grep -q "interface {" $$(echo $$pkg | sed 's|github.com/HoyeonS/hephaestus/||')/**.go; then \
+			mockgen -source=$$(echo $$pkg | sed 's|github.com/HoyeonS/hephaestus/||')/**.go \
+				-destination=$$(echo $$pkg | sed 's|github.com/HoyeonS/hephaestus/||')/mocks/mock_$$(basename $$pkg).go \
+				-package=mocks; \
+		fi \
+	done
+
+docs: ## Generate API documentation
+	swag init -g $(CMD_DIR)/server/main.go -o docs/swagger
+
+lint: ## Run linters
+	golangci-lint run --timeout=5m ./...
+
+fmt: ## Format code
 	gofmt -s -w .
 	goimports -w .
 
-check: lint test
+vet: ## Run go vet
+	$(GOCMD) vet ./...
 
-# Docker targets
-docker-build:
-	docker build -t $(BINARY_NAME) .
+check: fmt vet lint test ## Run all checks
 
-docker-run:
-	docker run $(BINARY_NAME)
+bench: ## Run benchmarks
+	$(GOTEST) -bench=. -benchmem ./...
 
-# Release targets
-release:
-	goreleaser release --snapshot --rm-dist
-
-# Dependency management
-deps-update:
+update-deps: ## Update dependencies
 	$(GOGET) -u ./...
 	$(GOMOD) tidy
+	$(GOMOD) verify
 
-# Database migrations
-migrate-up:
-	go run cmd/migrate/main.go up
+install: test ## Install binary
+	$(GOBUILD) -o $(GOPATH)/bin/$(BINARY_NAME) $(LDFLAGS) ./$(CMD_DIR)/server
 
-migrate-down:
-	go run cmd/migrate/main.go down
+uninstall: ## Uninstall binary
+	rm -f $(GOPATH)/bin/$(BINARY_NAME)
 
-# Development server
-dev:
-	go run $(MAIN_PACKAGE) -config config/config.yaml
+# Development tools installation
+tools: ## Install development tools
+	$(GOGET) github.com/golang/mock/mockgen
+	$(GOGET) github.com/swaggo/swag/cmd/swag
+	$(GOGET) golang.org/x/tools/cmd/goimports
+	$(GOGET) github.com/golangci/golangci-lint/cmd/golangci-lint
+	$(GOGET) github.com/stretchr/testify
+	$(GOGET) github.com/prometheus/client_golang/prometheus
 
 # Help target
-help:
-	@echo "Available targets:"
-	@echo "  all          : Run tests and build"
-	@echo "  build        : Build the binary"
-	@echo "  test         : Run tests"
-	@echo "  test-race    : Run tests with race detector"
-	@echo "  test-cover   : Run tests with coverage"
-	@echo "  bench        : Run benchmarks"
-	@echo "  clean        : Clean build artifacts"
-	@echo "  lint         : Run linter"
-	@echo "  tools        : Install development tools"
-	@echo "  init         : Initialize development environment"
-	@echo "  tidy         : Tidy and verify go.mod"
-	@echo "  generate     : Run go generate"
-	@echo "  docs         : Generate documentation"
-	@echo "  fmt          : Format code"
-	@echo "  check        : Run linter and tests"
-	@echo "  docker-build : Build Docker image"
-	@echo "  docker-run   : Run Docker container"
-	@echo "  release      : Create a release"
-	@echo "  deps-update  : Update dependencies"
-	@echo "  dev          : Run development server" 
+help: ## Display this help
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+
+# Version information
+version: ## Display version information
+	@echo "Version: $(VERSION)"
+
+# Default target
+.DEFAULT_GOAL := help 

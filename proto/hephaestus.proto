@@ -9,11 +9,14 @@ service Hephaestus {
   // Initialize creates a new Hephaestus instance with the given configuration
   rpc Initialize(InitializeRequest) returns (InitializeResponse) {}
   
-  // StreamLogs establishes a bidirectional stream for log processing
-  rpc StreamLogs(stream LogEntry) returns (stream FixResponse) {}
+  // StreamLogs establishes a bidirectional stream for log processing and solution delivery
+  rpc StreamLogs(stream LogEntry) returns (stream SolutionResponse) {}
+  
+  // GetNode retrieves information about a Hephaestus node
+  rpc GetNode(GetNodeRequest) returns (GetNodeResponse) {}
 }
 
-// Configuration for initializing Hephaestus
+// Configuration message
 message Config {
   GitHubConfig github = 1;
   AIConfig ai = 2;
@@ -21,47 +24,45 @@ message Config {
   string mode = 4; // "suggest" or "deploy"
 }
 
-// GitHub configuration
 message GitHubConfig {
-  string repository = 1;
+  string repository = 1; // format: "owner/repo"
   string branch = 2;
   string token = 3;
 }
 
-// AI provider configuration
 message AIConfig {
   string provider = 1;
   string api_key = 2;
+  string model = 3;
 }
 
-// Log configuration
 message LogConfig {
-  string level = 1; // "debug", "info", "warn", "error", "fatal"
+  string level = 1;
+  string threshold_level = 2;
 }
 
-// Request to initialize Hephaestus
+// Initialize request/response messages
 message InitializeRequest {
   Config config = 1;
 }
 
-// Response from initialization
 message InitializeResponse {
   string status = 1;
   string message = 2;
   string node_id = 3;
 }
 
-// Log entry from client application
+// Log streaming messages
 message LogEntry {
-  string level = 1;
-  string message = 2;
-  string timestamp = 3;
-  map<string, string> metadata = 4;
-  string stack_trace = 5;
+  string node_id = 1;
+  string level = 2;
+  string message = 3;
+  string timestamp = 4;
+  map<string, string> metadata = 5;
+  string stack_trace = 6;
 }
 
-// Response containing fix information
-message FixResponse {
+message SolutionResponse {
   string status = 1;
   string message = 2;
   oneof result {
@@ -70,25 +71,37 @@ message FixResponse {
   }
 }
 
-// Suggested fix when in "suggest" mode
 message SuggestedFix {
-  string file_path = 1;
-  string original_code = 2;
-  string suggested_code = 3;
-  string explanation = 4;
+  string solution_id = 1;
+  string description = 2;
+  repeated CodeChange changes = 3;
 }
 
-// Pull request information when in "deploy" mode
+message CodeChange {
+  string file_path = 1;
+  string original_code = 2;
+  string updated_code = 3;
+  int32 line_start = 4;
+  int32 line_end = 5;
+}
+
 message PullRequest {
   string url = 1;
   string title = 2;
   string branch = 3;
-  repeated FileChange changes = 4;
+  repeated CodeChange changes = 4;
 }
 
-// File changes in a pull request
-message FileChange {
-  string file_path = 1;
-  string original_content = 2;
-  string new_content = 3;
+// Node information messages
+message GetNodeRequest {
+  string node_id = 1;
+}
+
+message GetNodeResponse {
+  string id = 1;
+  Config configuration = 2;
+  string repository_id = 3;
+  string status = 4;
+  string created_at = 5;
+  string last_active = 6;
 } 

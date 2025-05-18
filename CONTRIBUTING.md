@@ -12,136 +12,197 @@ We love your input! We want to make contributing to Hephaestus as easy and trans
 
 We use GitHub to host code, to track issues and feature requests, as well as accept pull requests.
 
-1. Fork the repo and create your branch from `main`.
-2. If you've added code that should be tested, add tests.
-3. If you've changed APIs, update the documentation.
-4. Ensure the test suite passes.
-5. Make sure your code follows the Go style guide.
+1. Fork the repo and create your branch from `main`
+2. If you've added code that should be tested, add tests
+3. If you've changed APIs, update the documentation
+4. Ensure the test suite passes
+5. Make sure your code lints
 6. Issue that pull request!
-
-## Code Style
-
-### Go Guidelines
-
-- Follow the [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
-- Use `gofmt` to format your code
-- Follow the [Effective Go](https://golang.org/doc/effective_go.html) guidelines
-- Document all exported types, functions, and methods
-- Keep functions focused and small
-- Use meaningful variable names
-- Handle errors explicitly
-
-### Project-Specific Guidelines
-
-1. **File Organization**
-   - Place internal code in the `internal/` directory
-   - Place reusable packages in the `pkg/` directory
-   - Keep `cmd/` directory clean and minimal
-
-2. **Naming Conventions**
-   - Use descriptive package names
-   - Avoid package name collisions
-   - Use consistent naming across similar types/functions
-
-3. **Error Handling**
-   - Use custom error types when needed
-   - Wrap errors with context
-   - Don't panic in library code
-
-4. **Testing**
-   - Write table-driven tests
-   - Use meaningful test names
-   - Mock external dependencies
-   - Aim for high test coverage
-
-## Git Commit Messages
-
-- Use the present tense ("Add feature" not "Added feature")
-- Use the imperative mood ("Move cursor to..." not "Moves cursor to...")
-- Limit the first line to 72 characters or less
-- Reference issues and pull requests liberally after the first line
-
-Example:
-```
-Add error pattern matching for panic detection
-
-- Implement regex-based pattern matching
-- Add test cases for common panic scenarios
-- Update documentation with new patterns
-
-Fixes #123
-```
 
 ## Pull Request Process
 
-1. Update the README.md with details of changes to the interface
-2. Update the documentation with any new configuration or dependencies
-3. The PR will be merged once you have the sign-off of two maintainers
+1. Update the README.md with details of changes to the interface, if applicable
+2. Update the docs/ with any necessary documentation
+3. The PR will be merged once you have the sign-off of two other developers
+4. If you haven't already, complete the Contributor License Agreement ("CLA")
 
-## Running Tests
+## Any contributions you make will be under the MIT Software License
 
-```bash
-# Run all tests
-make test
+In short, when you submit code changes, your submissions are understood to be under the same [MIT License](http://choosealicense.com/licenses/mit/) that covers the project. Feel free to contact the maintainers if that's a concern.
 
-# Run tests with race detection
-make test-race
+## Report bugs using GitHub's [issue tracker](https://github.com/HoyeonS/hephaestus/issues)
 
-# Run specific test
-go test ./internal/collector -run TestCollector
+We use GitHub issues to track public bugs. Report a bug by [opening a new issue](https://github.com/HoyeonS/hephaestus/issues/new); it's that easy!
 
-# Run benchmarks
-go test -bench=. ./...
+## Write bug reports with detail, background, and sample code
+
+**Great Bug Reports** tend to have:
+
+- A quick summary and/or background
+- Steps to reproduce
+  - Be specific!
+  - Give sample code if you can
+- What you expected would happen
+- What actually happens
+- Notes (possibly including why you think this might be happening, or stuff you tried that didn't work)
+
+## Code Style Guidelines
+
+### Go Code
+
+Follow the official Go style guide and common practices:
+
+1. Use `gofmt` to format your code
+2. Follow [Effective Go](https://golang.org/doc/effective_go.html) guidelines
+3. Document all exported functions, types, and packages
+4. Write meaningful commit messages
+5. Include tests for new functionality
+
+### Protocol Buffers
+
+1. Use consistent naming:
+   - Service names: PascalCase
+   - Method names: PascalCase
+   - Message names: PascalCase
+   - Field names: snake_case
+
+2. Include comments for all messages and fields
+
+### Project Structure
+
+```
+hephaestus/
+├── cmd/                    # Command-line applications
+├── internal/              # Internal packages
+├── pkg/                   # Public packages
+├── proto/                 # Protocol Buffers
+├── docs/                  # Documentation
+└── examples/              # Example code
 ```
 
-## Setting Up Development Environment
+## Testing Guidelines
 
-1. Install Go 1.21 or later
-2. Install development tools:
-```bash
-make tools
+1. **Unit Tests**
+   - Test all exported functions
+   - Use table-driven tests
+   - Mock external dependencies
+   - Aim for >80% coverage
+
+2. **Integration Tests**
+   - Test component interactions
+   - Use docker-compose for dependencies
+   - Clean up test resources
+
+3. **Performance Tests**
+   - Benchmark critical paths
+   - Test with realistic data volumes
+   - Monitor resource usage
+
+## Documentation Guidelines
+
+1. **Code Documentation**
+   - Document all exported symbols
+   - Include examples where appropriate
+   - Explain complex algorithms
+   - Document assumptions
+
+2. **API Documentation**
+   - Document all API endpoints
+   - Include request/response examples
+   - Document error conditions
+   - Keep OpenAPI spec updated
+
+3. **Architecture Documentation**
+   - Update HLD/LLD for major changes
+   - Include diagrams where helpful
+   - Document design decisions
+
+## Commit Message Guidelines
+
+Format:
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
 ```
 
-3. Set up pre-commit hooks:
-```bash
-make init
+Types:
+- feat: New feature
+- fix: Bug fix
+- docs: Documentation only changes
+- style: Changes that do not affect the meaning of the code
+- refactor: Code change that neither fixes a bug nor adds a feature
+- perf: Code change that improves performance
+- test: Adding missing tests
+- chore: Changes to the build process or auxiliary tools
+
+Example:
+```
+feat(log-processor): add support for structured logging
+
+- Add JSON log format support
+- Include timestamp and correlation ID
+- Update documentation
+
+Closes #123
 ```
 
-4. Create a development configuration:
-```bash
-cp config/config.example.yaml config/config.yaml
-```
+## Branch Naming Convention
 
-## Documentation
+- Feature branches: `feature/description`
+- Bug fixes: `fix/description`
+- Documentation: `docs/description`
+- Performance improvements: `perf/description`
 
-- Document all exported types and functions
-- Include examples in documentation
-- Update API documentation when making changes
-- Keep README.md up to date
+## Release Process
 
-## Issue and Feature Request Process
+1. **Version Bump**
+   - Update version in code
+   - Update CHANGELOG.md
+   - Create release notes
 
-1. Check existing issues and pull requests
-2. Use the issue template
-3. Provide detailed reproduction steps
-4. Include relevant logs and error messages
-5. Specify your environment details
+2. **Testing**
+   - Run full test suite
+   - Perform integration tests
+   - Check documentation
 
-## Code Review Process
+3. **Release**
+   - Tag release in git
+   - Create GitHub release
+   - Update documentation
 
-1. All code changes require review
-2. Reviewers should focus on:
-   - Code correctness
-   - Test coverage
-   - Documentation
-   - Performance implications
-   - Security implications
-
-## Community
+## Getting Help
 
 - Join our [Discord server](https://discord.gg/hephaestus)
-- Follow our [Twitter](https://twitter.com/hephaestus)
-- Read our [blog](https://hephaestus.dev/blog)
+- Check the [FAQ](docs/FAQ.md)
+- Ask in GitHub Issues
+- Contact the maintainers
+
+## Code of Conduct
+
+### Our Pledge
+
+We pledge to make participation in our project and our community a harassment-free experience for everyone.
+
+### Our Standards
+
+Examples of behavior that contributes to creating a positive environment include:
+
+- Using welcoming and inclusive language
+- Being respectful of differing viewpoints and experiences
+- Gracefully accepting constructive criticism
+- Focusing on what is best for the community
+- Showing empathy towards other community members
+
+### Our Responsibilities
+
+Project maintainers are responsible for clarifying the standards of acceptable behavior and are expected to take appropriate and fair corrective action in response to any instances of unacceptable behavior.
+
+### Enforcement
+
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by contacting the project team. All complaints will be reviewed and investigated and will result in a response that is deemed necessary and appropriate to the circumstances.
 
 ## License
 
