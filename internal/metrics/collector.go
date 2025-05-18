@@ -7,21 +7,21 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 // Collector implements the MetricsCollectionService interface
 type Collector struct {
-	// Prometheus metrics
-	nodeOperations   *prometheus.CounterVec
-	nodeStatus       *prometheus.GaugeVec
-	logProcessing    *prometheus.HistogramVec
-	modelLatency     *prometheus.HistogramVec
-	repositoryErrors *prometheus.CounterVec
-
-	// Active node metrics
+	// Node metrics
 	nodes     map[string]*NodeMetrics
 	nodeMutex sync.RWMutex
+
+	// Prometheus metrics
+	operationLatency    *prometheus.HistogramVec
+	operationErrors     *prometheus.CounterVec
+	nodeStatusGauge     *prometheus.GaugeVec
+	logProcessingGauge  *prometheus.GaugeVec
+	modelLatencyHist    *prometheus.HistogramVec
+	repositoryErrorCount *prometheus.CounterVec
 }
 
 // NodeMetrics represents metrics for a specific node
@@ -34,47 +34,87 @@ type NodeMetrics struct {
 
 // StatusChange represents a node status change event
 type StatusChange struct {
-	Timestamp time.Time
 	Status    string
+	Timestamp time.Time
 }
 
-// NewCollector creates a new instance of the metrics collector
+// NewCollector creates a new metrics collector
 func NewCollector() *Collector {
-	collector := &Collector{
+	return &Collector{
 		nodes: make(map[string]*NodeMetrics),
 	}
-
-	collector.initializeMetrics()
-	return collector
 }
 
 // Initialize sets up the metrics collector
 func (c *Collector) Initialize(ctx context.Context) error {
-	// Register metrics with Prometheus
-	if err := prometheus.Register(c.nodeOperations); err != nil {
-		return fmt.Errorf("failed to register node operations metric: %v", err)
+	c.operationLatency = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "operation_latency_seconds",
+			Help: "Latency of operations in seconds",
+		},
+		[]string{"operation"},
+	)
+
+	c.operationErrors = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "operation_errors_total",
+			Help: "Total number of operation errors",
+		},
+		[]string{"component"},
+	)
+
+	c.nodeStatusGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "node_status",
+			Help: "Current status of nodes",
+		},
+		[]string{"node_id", "status"},
+	)
+
+	c.logProcessingGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "log_processing_count",
+			Help: "Number of logs processed",
+		},
+		[]string{"node_id"},
+	)
+
+	c.modelLatencyHist = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "model_latency_seconds",
+			Help: "Latency of model operations in seconds",
+		},
+		[]string{"node_id", "operation"},
+	)
+
+	c.repositoryErrorCount = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "repository_errors_total",
+			Help: "Total number of repository operation errors",
+		},
+		[]string{"node_id", "operation", "error_type"},
+	)
+
+	// Register metrics
+	metrics := []prometheus.Collector{
+		c.operationLatency,
+		c.operationErrors,
+		c.nodeStatusGauge,
+		c.logProcessingGauge,
+		c.modelLatencyHist,
+		c.repositoryErrorCount,
 	}
 
-	if err := prometheus.Register(c.nodeStatus); err != nil {
-		return fmt.Errorf("failed to register node status metric: %v", err)
-	}
-
-	if err := prometheus.Register(c.logProcessing); err != nil {
-		return fmt.Errorf("failed to register log processing metric: %v", err)
-	}
-
-	if err := prometheus.Register(c.modelLatency); err != nil {
-		return fmt.Errorf("failed to register model latency metric: %v", err)
-	}
-
-	if err := prometheus.Register(c.repositoryErrors); err != nil {
-		return fmt.Errorf("failed to register repository errors metric: %v", err)
+	for _, metric := range metrics {
+		if err := prometheus.Register(metric); err != nil {
+			return fmt.Errorf("failed to register metric: %v", err)
+		}
 	}
 
 	return nil
 }
 
-// InitializeNodeMetrics initializes metrics collection for a node
+// InitializeNodeMetrics initializes metrics for a new node
 func (c *Collector) InitializeNodeMetrics(ctx context.Context, nodeID string) error {
 	c.nodeMutex.Lock()
 	defer c.nodeMutex.Unlock()
@@ -83,20 +123,24 @@ func (c *Collector) InitializeNodeMetrics(ctx context.Context, nodeID string) er
 		return fmt.Errorf("metrics already initialized for node: %s", nodeID)
 	}
 
-	metrics := &NodeMetrics{
+	c.nodes[nodeID] = &NodeMetrics{
 		NodeID:        nodeID,
 		CreatedAt:     time.Now(),
 		LastActive:    time.Now(),
 		StatusHistory: make([]StatusChange, 0),
 	}
 
-	c.nodes[nodeID] = metrics
-
-	// Initialize node-specific metrics
-	c.nodeOperations.WithLabelValues(nodeID, "initialize").Inc()
-	c.nodeStatus.WithLabelValues(nodeID).Set(1) // 1 indicates active
-
 	return nil
+}
+
+// RecordOperationMetrics records metrics for an operation
+func (c *Collector) RecordOperationMetrics(operationName string, duration time.Duration, successful bool) {
+	c.operationLatency.WithLabelValues(operationName).Observe(duration.Seconds())
+}
+
+// RecordErrorMetrics records error metrics for a component
+func (c *Collector) RecordErrorMetrics(componentName string, err error) {
+	c.operationErrors.WithLabelValues(componentName).Inc()
 }
 
 // RecordNodeStatusChange records a node status change
@@ -104,23 +148,18 @@ func (c *Collector) RecordNodeStatusChange(ctx context.Context, nodeID string, s
 	c.nodeMutex.Lock()
 	defer c.nodeMutex.Unlock()
 
-	metrics, exists := c.nodes[nodeID]
+	node, exists := c.nodes[nodeID]
 	if !exists {
-		return fmt.Errorf("metrics not found for node: %s", nodeID)
+		return fmt.Errorf("node not found: %s", nodeID)
 	}
 
-	// Record status change
-	statusChange := StatusChange{
-		Timestamp: time.Now(),
+	node.LastActive = time.Now()
+	node.StatusHistory = append(node.StatusHistory, StatusChange{
 		Status:    status,
-	}
-	metrics.StatusHistory = append(metrics.StatusHistory, statusChange)
-	metrics.LastActive = statusChange.Timestamp
+		Timestamp: time.Now(),
+	})
 
-	// Update Prometheus metrics
-	c.nodeOperations.WithLabelValues(nodeID, "status_change").Inc()
-	c.nodeStatus.WithLabelValues(nodeID).Set(statusToValue(status))
-
+	c.nodeStatusGauge.WithLabelValues(nodeID, status).Set(statusToValue(status))
 	return nil
 }
 
@@ -130,29 +169,24 @@ func (c *Collector) RecordLogProcessing(ctx context.Context, nodeID string, dura
 	defer c.nodeMutex.RUnlock()
 
 	if _, exists := c.nodes[nodeID]; !exists {
-		return fmt.Errorf("metrics not found for node: %s", nodeID)
+		return fmt.Errorf("node not found: %s", nodeID)
 	}
 
-	// Record processing duration and log count
-	c.logProcessing.WithLabelValues(nodeID, "duration").Observe(duration.Seconds())
-	c.nodeOperations.WithLabelValues(nodeID, "logs_processed").Add(float64(logCount))
-
+	c.logProcessingGauge.WithLabelValues(nodeID).Add(float64(logCount))
+	c.operationLatency.WithLabelValues("log_processing").Observe(duration.Seconds())
 	return nil
 }
 
-// RecordModelLatency records model interaction latency
+// RecordModelLatency records model operation latency
 func (c *Collector) RecordModelLatency(ctx context.Context, nodeID string, operation string, duration time.Duration) error {
 	c.nodeMutex.RLock()
 	defer c.nodeMutex.RUnlock()
 
 	if _, exists := c.nodes[nodeID]; !exists {
-		return fmt.Errorf("metrics not found for node: %s", nodeID)
+		return fmt.Errorf("node not found: %s", nodeID)
 	}
 
-	// Record model operation latency
-	c.modelLatency.WithLabelValues(nodeID, operation).Observe(duration.Seconds())
-	c.nodeOperations.WithLabelValues(nodeID, "model_operation").Inc()
-
+	c.modelLatencyHist.WithLabelValues(nodeID, operation).Observe(duration.Seconds())
 	return nil
 }
 
@@ -162,13 +196,10 @@ func (c *Collector) RecordRepositoryError(ctx context.Context, nodeID string, op
 	defer c.nodeMutex.RUnlock()
 
 	if _, exists := c.nodes[nodeID]; !exists {
-		return fmt.Errorf("metrics not found for node: %s", nodeID)
+		return fmt.Errorf("node not found: %s", nodeID)
 	}
 
-	// Record repository error
-	c.repositoryErrors.WithLabelValues(nodeID, operation, errorType).Inc()
-	c.nodeOperations.WithLabelValues(nodeID, "repository_error").Inc()
-
+	c.repositoryErrorCount.WithLabelValues(nodeID, operation, errorType).Inc()
 	return nil
 }
 
@@ -178,62 +209,41 @@ func (c *Collector) CleanupNodeMetrics(ctx context.Context, nodeID string) error
 	defer c.nodeMutex.Unlock()
 
 	if _, exists := c.nodes[nodeID]; !exists {
-		return fmt.Errorf("metrics not found for node: %s", nodeID)
+		return fmt.Errorf("node not found: %s", nodeID)
 	}
 
-	// Record cleanup operation
-	c.nodeOperations.WithLabelValues(nodeID, "cleanup").Inc()
-	c.nodeStatus.DeleteLabelValues(nodeID)
-
 	delete(c.nodes, nodeID)
+
+	// Remove node-specific metrics
+	c.nodeStatusGauge.DeleteLabelValues(nodeID, "active")
+	c.nodeStatusGauge.DeleteLabelValues(nodeID, "error")
+	c.logProcessingGauge.DeleteLabelValues(nodeID)
+
 	return nil
 }
 
-// Helper functions
+// GetCurrentMetrics retrieves current system metrics
+func (c *Collector) GetCurrentMetrics() map[string]interface{} {
+	c.nodeMutex.RLock()
+	defer c.nodeMutex.RUnlock()
 
-func (c *Collector) initializeMetrics() {
-	c.nodeOperations = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "hephaestus_node_operations_total",
-			Help: "Total number of node operations by type",
-		},
-		[]string{"node_id", "operation"},
-	)
+	metrics := make(map[string]interface{})
 
-	c.nodeStatus = promauto.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "hephaestus_node_status",
-			Help: "Current node status (0: inactive, 1: active, 2: error)",
-		},
-		[]string{"node_id"},
-	)
+	// Add node metrics
+	nodeMetrics := make(map[string]interface{})
+	for nodeID, node := range c.nodes {
+		nodeMetrics[nodeID] = map[string]interface{}{
+			"created_at":      node.CreatedAt,
+			"last_active":     node.LastActive,
+			"status_history": node.StatusHistory,
+		}
+	}
+	metrics["nodes"] = nodeMetrics
 
-	c.logProcessing = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "hephaestus_log_processing_duration_seconds",
-			Help:    "Log processing duration in seconds",
-			Buckets: prometheus.ExponentialBuckets(0.01, 2, 10),
-		},
-		[]string{"node_id", "metric"},
-	)
-
-	c.modelLatency = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "hephaestus_model_latency_seconds",
-			Help:    "Model operation latency in seconds",
-			Buckets: prometheus.ExponentialBuckets(0.1, 2, 10),
-		},
-		[]string{"node_id", "operation"},
-	)
-
-	c.repositoryErrors = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "hephaestus_repository_errors_total",
-			Help: "Total number of repository errors by type",
-		},
-		[]string{"node_id", "operation", "error_type"},
-	)
+	return metrics
 }
+
+// Helper functions
 
 func statusToValue(status string) float64 {
 	switch status {
