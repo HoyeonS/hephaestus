@@ -141,8 +141,8 @@ func TestSyncLogger(t *testing.T) {
 func TestLoggingMethods(t *testing.T) {
 	// Initialize logger for tests
 	err := Initialize(Config{
-		Level:  "debug",
-		Format: "json",
+		Level:      "debug",
+		OutputPath: "json",
 	})
 	require.NoError(t, err)
 
