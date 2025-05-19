@@ -64,8 +64,8 @@ func (m *MockRepositoryManager) ListRepositoryFiles(ctx context.Context) ([]stri
 func setupTest(t *testing.T) (*Service, *MockModelClient, *MockMetricsCollector, *MockRepositoryManager, context.Context) {
 	// Initialize logger
 	err := logger.Initialize(&logger.Config{
-		Level:      "debug",
-		OutputPath: "",
+		Level:  "debug",
+		Output: "",
 	})
 	require.NoError(t, err)
 

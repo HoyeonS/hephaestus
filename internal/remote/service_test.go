@@ -52,9 +52,9 @@ func (m *MockMetricsCollector) RecordRepositoryError(ctx context.Context, nodeID
 
 func setupTest(t *testing.T) (context.Context, *Service, *MockGitHubClient, *MockMetricsCollector) {
 	// Initialize logger for tests
-	err := logger.Initialize(&logger.Config{
+	err := logger.Initialize(&hephaestus.LogConfig{
 		Level:  "debug",
-		Format: "console",
+		Output: "console",
 	})
 	require.NoError(t, err)
 
@@ -64,7 +64,7 @@ func setupTest(t *testing.T) (context.Context, *Service, *MockGitHubClient, *Moc
 	service := NewService(mockMetrics)
 	service.client = &github.Client{
 		Repositories: &github.RepositoriesService{},
-		Issues:      &github.IssuesService{},
+		Issues:       &github.IssuesService{},
 	}
 
 	return ctx, service, mockClient, mockMetrics
@@ -243,9 +243,9 @@ func TestCreatePullRequest(t *testing.T) {
 
 		githubPR := &github.NewPullRequest{
 			Title:               &pr.Title,
-			Body:               &pr.Description,
-			Head:               &pr.HeadBranch,
-			Base:               &pr.BaseBranch,
+			Body:                &pr.Description,
+			Head:                &pr.HeadBranch,
+			Base:                &pr.BaseBranch,
 			MaintainerCanModify: github.Bool(true),
 		}
 
@@ -268,9 +268,9 @@ func TestCreatePullRequest(t *testing.T) {
 
 		githubPR := &github.NewPullRequest{
 			Title:               &pr.Title,
-			Body:               &pr.Description,
-			Head:               &pr.HeadBranch,
-			Base:               &pr.BaseBranch,
+			Body:                &pr.Description,
+			Head:                &pr.HeadBranch,
+			Base:                &pr.BaseBranch,
 			MaintainerCanModify: github.Bool(true),
 		}
 
@@ -317,4 +317,4 @@ func TestCleanup(t *testing.T) {
 		err := service.Cleanup(ctx, "non-existent")
 		require.NoError(t, err)
 	})
-} 
+}
