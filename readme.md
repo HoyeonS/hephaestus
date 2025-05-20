@@ -1,171 +1,71 @@
 # Hephaestus
 
-Hephaestus is a sophisticated automated system for monitoring, analyzing, and resolving issues in distributed systems. Named after the Greek god of craftsmanship and technology, this tool leverages machine learning models to provide intelligent solutions for system problems.
+A log processing and solution generation system.
 
-## Features
-
-- **Automated Log Analysis**: Real-time processing and analysis of system logs using advanced machine learning models
-- **Intelligent Problem Resolution**: Model-powered generation of solution proposals for identified issues
-- **Distributed Node Management**: Robust management of distributed system nodes
-- **Remote Repository Integration**: Seamless integration with version control systems
-- **Metrics Collection**: Comprehensive system metrics collection and monitoring
-- **gRPC-based Communication**: High-performance communication between components using gRPC
-- **Flexible Configuration**: Extensive configuration options for all system components
-
-## Architecture
-
-### Core Components
-
-1. **Node Manager** (`internal/node/manager.go`)
-   - Handles node registration and lifecycle management
-   - Tracks node status and health
-   - Manages node configuration
-
-2. **Model Service** (`internal/model/service.go`)
-   - Provides model-powered solution generation
-   - Validates proposed solutions
-   - Manages model sessions and configurations
-
-3. **Remote Repository Service** (`internal/remote/service.go`)
-   - Handles interactions with version control systems
-   - Manages file operations and change requests
-   - Provides repository connection management
-
-4. **Repository Service** (`internal/repository/service.go`)
-   - Coordinates repository operations
-   - Manages file content retrieval and updates
-   - Handles change request creation
-
-5. **Logger** (`internal/logger/logger.go`)
-   - Provides structured logging capabilities
-   - Supports multiple output formats
-   - Includes context-aware logging
-
-6. **Metrics Collector** (`internal/metrics/collector.go`)
-   - Collects system metrics
-   - Tracks operation latencies
-   - Monitors error rates
-
-### Communication Protocol
-
-The system uses Protocol Buffers and gRPC for efficient communication between components. The protocol definitions can be found in `proto/hephaestus.proto`.
-
-## Getting Started
-
-### Prerequisites
-
-- Go 1.19 or later
-- Protocol Buffers compiler (protoc)
-- Make
-- Git
-
-### Installation
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/HoyeonS/hephaestus.git
-   cd hephaestus
-   ```
-
-2. Install dependencies:
-   ```bash
-   make deps
-   ```
-
-3. Generate Protocol Buffer code:
-   ```bash
-   make proto
-   ```
-
-4. Build the project:
-   ```bash
-   make build
-   ```
-
-### Configuration
-
-Create a configuration file (`config.yaml`) with the following structure:
-
-```yaml
-log_level: info
-log_output: stdout
-node_id: your-node-id
-
-repository:
-  provider: your-provider # e.g., gitlab, bitbucket
-  owner: your-repo-owner
-  name: your-repo-name
-  token: your-access-token
-  base_path: /path/to/repo
-  branch: main
-
-model:
-  version: v1
-  api_key: your-model-api-key
-  base_url: https://api.example.com
-  timeout: 30
-```
-
-### Running Tests
-
-```bash
-make test          # Run all tests
-make unit-test     # Run unit tests only
-make integration-test  # Run integration tests
-```
-
-## Usage
-
-### Starting the Server
-
-```bash
-./hephaestus server
-```
-
-### Using the Client
-
-See `examples/client/main.go` for a complete example of how to use the client:
-
-```go
-client := pb.NewHephaestusServiceClient(conn)
-```
-
-## Development
-
-### Directory Structure
+## Project Structure
 
 ```
 .
-├── cmd/            # Command-line applications
-├── examples/       # Example code and usage
-├── internal/       # Internal packages
-│   ├── config/     # Configuration management
-│   ├── logger/     # Logging system
-│   ├── metrics/    # Metrics collection
-│   ├── model/      # Model service
-│   ├── node/       # Node management
-│   ├── remote/     # Remote repository service
-│   ├── repository/ # Repository management
-│   └── server/     # gRPC server implementation
-├── pkg/            # Public packages
-│   └── hephaestus/ # Core types and interfaces
-├── proto/          # Protocol Buffer definitions
-└── test/           # Test suites
+├── examples/          # Example implementations
+│   └── simple/       # Simple example with configuration
+├── internal/         # Internal packages
+│   ├── node/        # Node implementation
+│   └── config/      # Configuration management
+└── pkg/             # Public packages
+    └── hephaestus/  # Core types and interfaces
 ```
 
-### Making Changes
+## Core Components
 
-1. Create a new branch for your changes
-2. Make your changes
-3. Run tests: `make test`
-4. Format code: `make fmt`
-5. Run linters: `make lint`
-6. Submit a change request
+1. **Node**: Processes logs and generates solutions
+2. **Configuration**: YAML-based configuration system
+3. **Log Processing**: Threshold-based log processing
+4. **Solution Generation**: Generates solutions based on log patterns
 
-## Contributing
+## Usage
 
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a new change request
+1. Create a configuration file (see `examples/simple/hephaestus.yaml`)
+2. Initialize and start a node:
+
+```go
+manager := config.NewConfigurationManager("hephaestus.yaml")
+if err := manager.LoadConfiguration(); err != nil {
+    // Handle error
+}
+
+node, err := node.NewNode(manager.Get())
+if err != nil {
+    // Handle error
+}
+
+ctx, cancel := context.WithCancel(context.Background())
+defer cancel()
+
+if err := node.Start(ctx); err != nil {
+    // Handle error
+}
+```
+
+3. Process logs:
+
+```go
+entry := hephaestus.LogEntry{
+    Timestamp:   time.Now(),
+    Level:       "error",
+    Message:     "Your error message",
+    Context:     map[string]interface{}{"key": "value"},
+    ProcessedAt: time.Now(),
+}
+
+if err := node.ProcessLog(entry); err != nil {
+    // Handle error
+}
+```
+
+## Configuration
+
+See `examples/simple/hephaestus.yaml` for configuration options.
+
+## License
+
+MIT
