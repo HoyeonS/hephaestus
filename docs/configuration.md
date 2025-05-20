@@ -8,8 +8,6 @@ By default, Hephaestus looks for the configuration file at:
 - `~/.hephaestus/config.yaml` (Unix-like systems)
 - `%USERPROFILE%\.hephaestus\config.yaml` (Windows)
 
-You can override this location by setting the `HEPHAESTUS_CONFIG` environment variable.
-
 ## Getting Started
 
 1. Copy the default configuration file from `config/config.yaml` to your configuration directory
@@ -87,21 +85,37 @@ If any optional configuration values are not specified, the following defaults w
 - `repository.max_file_size`: 1048576 (1MB)
 - `mode`: "suggest"
 
-## Environment Variables
+## Configuration File Example
 
-While the configuration file is the preferred method, you can also use environment variables:
+Here's a complete example of a configuration file:
 
-- `HEPHAESTUS_CONFIG`: Path to the configuration file
-- `HEPHAESTUS_REMOTE_TOKEN`: GitHub authentication token
-- `HEPHAESTUS_REMOTE_OWNER`: Repository owner
-- `HEPHAESTUS_REMOTE_REPO`: Repository name
-- `HEPHAESTUS_REMOTE_BRANCH`: Target branch
-- `HEPHAESTUS_MODEL_PROVIDER`: Model service provider
-- `HEPHAESTUS_MODEL_API_KEY`: Model service API key
-- `HEPHAESTUS_MODEL_VERSION`: Model version
-- `HEPHAESTUS_LOG_LEVEL`: Log level
-- `HEPHAESTUS_LOG_FORMAT`: Log output format
-- `HEPHAESTUS_REPO_PATH`: Repository path
-- `HEPHAESTUS_MODE`: Operational mode
+```yaml
+remote:
+  token: "ghp_1234567890abcdef"
+  owner: "my-organization"
+  repository: "my-project"
+  branch: "main"
 
-Note: Environment variables will override values from the configuration file. 
+model:
+  provider: "openai"
+  api_key: "sk-1234567890abcdef"
+  model_version: "gpt-4"
+
+log:
+  level: "info"
+  format: "json"
+
+repository:
+  path: "/path/to/my/project"
+  max_files: 10000
+  max_file_size: 1048576
+
+mode: "suggest"
+```
+
+## Security Considerations
+
+1. Keep your configuration file secure and never commit it to version control
+2. Use appropriate file permissions (600) for your configuration file
+3. Regularly rotate your API keys and tokens
+4. Use the minimum required permissions for your GitHub token 
