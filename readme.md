@@ -385,20 +385,20 @@ Received → Buffered → Processed → Archived
 ### Installation
 
 1. Clone the repository:
-```bash
-git clone https://github.com/HoyeonS/hephaestus.git
-cd hephaestus
-```
+   ```bash
+   git clone https://github.com/HoyeonS/hephaestus.git
+   cd hephaestus
+   ```
 
 2. Install dependencies:
-```bash
+   ```bash
 go mod download
-```
+   ```
 
 3. Build the project:
-```bash
-make build
-```
+   ```bash
+   make build
+   ```
 
 ## Configuration
 

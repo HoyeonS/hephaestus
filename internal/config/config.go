@@ -137,3 +137,4 @@ func (m *ConfigurationManager) ValidateConfiguration() error {
 
 	return nil
 }
+ 
