@@ -58,10 +58,59 @@ A log processing and solution generation system that monitors logs, detects patt
 │   └── simple/       # Simple example with configuration
 ├── internal/         # Internal packages
 │   ├── node/        # Node implementation
-│   └── config/      # Configuration management
-└── pkg/             # Public packages
-    └── hephaestus/  # Core types and interfaces
+│   ├── config/      # Configuration management
+│   ├── logger/      # Logging system
+│   ├── repository/  # Repository management
+│   ├── remote/      # Remote repository handling
+│   ├── metrics/     # Metrics collection
+│   ├── log/         # Log processing
+│   ├── model/       # Model implementation
+│   └── server/      # Server implementation
+├── pkg/             # Public packages
+│   └── hephaestus/  # Core types and interfaces
+├── config/          # Configuration files
+├── deployment/      # Deployment configurations
+├── proto/          # Protocol definitions
+├── Makefile        # Build and development commands
+├── Dockerfile      # Container configuration
+├── go.mod          # Go module definition
+├── go.sum          # Go module checksums
+└── .gitignore      # Git ignore rules
 ```
+
+### Key Directories
+
+1. **examples/**
+   - Contains example implementations
+   - Simple example with configuration
+
+2. **internal/**
+   - `node/`: Node implementation and management
+   - `config/`: Configuration loading and validation
+   - `logger/`: Logging system implementation
+   - `repository/`: Repository management
+   - `remote/`: Remote repository integration
+   - `metrics/`: Metrics collection and monitoring
+   - `log/`: Log processing implementation
+   - `model/`: Model implementation
+   - `server/`: Server implementation
+
+3. **pkg/**
+   - `hephaestus/`: Public types and interfaces
+   - Core data structures
+   - Public APIs
+
+4. **config/**
+   - Configuration templates
+   - Default configurations
+
+5. **deployment/**
+   - Deployment configurations
+   - Container settings
+
+6. **proto/**
+   - Protocol definitions
+   - API specifications
 
 ## Setup Guide
 
@@ -85,7 +134,7 @@ go mod download
 
 3. Build the project:
 ```bash
-go build ./...
+make build
 ```
 
 ## Configuration
@@ -239,13 +288,13 @@ The system includes comprehensive error handling:
 ### Building
 
 ```bash
-go build ./...
+make build
 ```
 
 ### Testing
 
 ```bash
-go test ./...
+make test
 ```
 
 ### Code Style
