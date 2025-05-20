@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
 	"gopkg.in/yaml.v3"
@@ -12,27 +13,38 @@ import (
 
 // ConfigurationManager handles system configuration
 type ConfigurationManager struct {
-	config *hephaestus.SystemConfiguration
-	path   string
+	nativeConfig *hephaestus.SystemConfiguration
+	clientConfig *hephaestus.ClientConfiguration
+	nativePath   string
+	clientPath   string
 }
 
 // NewConfigurationManager creates a new configuration manager
-func NewConfigurationManager(configPath string) *ConfigurationManager {
-	if configPath == "" {
-		configPath = GetDefaultConfigPath()
+func NewConfigurationManager(nativePath, clientPath string) *ConfigurationManager {
+	if nativePath == "" {
+		nativePath = GetDefaultNativeConfigPath()
+	}
+	if clientPath == "" {
+		clientPath = GetDefaultClientConfigPath()
 	}
 	return &ConfigurationManager{
-		path: configPath,
+		nativePath: nativePath,
+		clientPath: clientPath,
 	}
 }
 
-// Get returns the current configuration
-func (m *ConfigurationManager) Get() *hephaestus.SystemConfiguration {
-	return m.config
+// GetNativeConfig returns the current native configuration
+func (m *ConfigurationManager) GetNativeConfig() *hephaestus.SystemConfiguration {
+	return m.nativeConfig
 }
 
-// Set updates the configuration
-func (m *ConfigurationManager) Set(config *hephaestus.SystemConfiguration) error {
+// GetClientConfig returns the current client configuration
+func (m *ConfigurationManager) GetClientConfig() *hephaestus.ClientConfiguration {
+	return m.clientConfig
+}
+
+// SetNativeConfig updates the native configuration
+func (m *ConfigurationManager) SetNativeConfig(config *hephaestus.SystemConfiguration) error {
 	if config == nil {
 		return fmt.Errorf("configuration is nil")
 	}
@@ -41,200 +53,229 @@ func (m *ConfigurationManager) Set(config *hephaestus.SystemConfiguration) error
 		return fmt.Errorf("invalid configuration: %v", err)
 	}
 
-	m.config = config
+	m.nativeConfig = config
 	return nil
 }
 
-// LoadConfiguration loads configuration from file and environment
+// SetClientConfig updates the client configuration
+func (m *ConfigurationManager) SetClientConfig(config *hephaestus.ClientConfiguration) error {
+	if config == nil {
+		return fmt.Errorf("configuration is nil")
+	}
+
+	if err := hephaestus.ValidateClientConfiguration(config); err != nil {
+		return fmt.Errorf("invalid configuration: %v", err)
+	}
+
+	m.clientConfig = config
+	return nil
+}
+
+// LoadConfiguration loads both native and client configurations from files
 func (m *ConfigurationManager) LoadConfiguration() error {
-	// Initialize with default configuration
-	if m.config == nil {
-		m.config = GetDefaultConfiguration()
+	// Initialize with default configurations
+	if m.nativeConfig == nil {
+		m.nativeConfig = GetDefaultNativeConfiguration()
+	}
+	if m.clientConfig == nil {
+		m.clientConfig = GetDefaultClientConfiguration()
 	}
 
-	// Load from file if it exists
-	if err := m.loadConfigurationFromFile(); err != nil {
-		return err
+	// Load native configuration from file
+	if err := m.loadNativeConfigurationFromFile(); err != nil {
+		return fmt.Errorf("failed to load native configuration: %v", err)
 	}
 
-	// Load from environment variables
-	if err := m.loadConfigurationFromEnvironment(); err != nil {
-		return err
+	// Load client configuration from file
+	if err := m.loadClientConfigurationFromFile(); err != nil {
+		return fmt.Errorf("failed to load client configuration: %v", err)
 	}
 
 	return nil
 }
 
-// loadConfigurationFromFile loads configuration from a YAML file
-func (m *ConfigurationManager) loadConfigurationFromFile() error {
-	data, err := os.ReadFile(m.path)
+// loadNativeConfigurationFromFile loads native configuration from a YAML file
+func (m *ConfigurationManager) loadNativeConfigurationFromFile() error {
+	data, err := os.ReadFile(m.nativePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// If file doesn't exist, create with default configuration
-			return m.createDefaultConfiguration()
+			return m.createDefaultNativeConfiguration()
 		}
-		return fmt.Errorf("failed to read configuration file: %v", err)
+		return fmt.Errorf("failed to read native configuration file: %v", err)
 	}
 
 	var config hephaestus.SystemConfiguration
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		return fmt.Errorf("failed to parse configuration file: %v", err)
+		return fmt.Errorf("failed to parse native configuration file: %v", err)
 	}
 
-	return m.Set(&config)
+	return m.SetNativeConfig(&config)
 }
 
-// loadConfigurationFromEnvironment loads configuration from environment variables
-func (m *ConfigurationManager) loadConfigurationFromEnvironment() error {
-	// Load Remote Repository configuration
-	m.loadRemoteRepositoryConfigurationFromEnvironment(&m.config.RemoteSettings)
-
-	// Load Model configuration
-	m.loadModelConfigurationFromEnvironment(&m.config.ModelSettings)
-
-	// Load Log configuration
-	m.loadLoggingConfigurationFromEnvironment(&m.config.LoggingSettings)
-
-	// Load Repository configuration
-	m.loadRepositoryConfigurationFromEnvironment(&m.config.RepositorySettings)
-
-	// Load Operation Mode
-	if mode := os.Getenv("HEPHAESTUS_MODE"); mode != "" {
-		m.config.OperationalMode = mode
-	}
-
-	return nil
-}
-
-// loadRemoteRepositoryConfigurationFromEnvironment loads remote repository configuration
-func (m *ConfigurationManager) loadRemoteRepositoryConfigurationFromEnvironment(config *hephaestus.RemoteRepositoryConfiguration) {
-	if token := os.Getenv("REMOTE_TOKEN"); token != "" {
-		config.AuthToken = token
-	}
-	if owner := os.Getenv("REMOTE_OWNER"); owner != "" {
-		config.RepositoryOwner = owner
-	}
-	if repo := os.Getenv("REMOTE_REPO"); repo != "" {
-		config.RepositoryName = repo
-	}
-	if branch := os.Getenv("REMOTE_BRANCH"); branch != "" {
-		config.TargetBranch = branch
-	}
-}
-
-// loadModelConfigurationFromEnvironment loads model configuration
-func (m *ConfigurationManager) loadModelConfigurationFromEnvironment(config *hephaestus.ModelServiceConfiguration) {
-	if provider := os.Getenv("MODEL_PROVIDER"); provider != "" {
-		config.ServiceProvider = provider
-	}
-	if apiKey := os.Getenv("MODEL_API_KEY"); apiKey != "" {
-		config.ServiceAPIKey = apiKey
-	}
-	if version := os.Getenv("MODEL_VERSION"); version != "" {
-		config.ModelVersion = version
-	}
-}
-
-// loadLoggingConfigurationFromEnvironment loads logging configuration
-func (m *ConfigurationManager) loadLoggingConfigurationFromEnvironment(config *hephaestus.LoggingConfiguration) {
-	if level := os.Getenv("LOG_LEVEL"); level != "" {
-		config.LogLevel = level
-	}
-	if format := os.Getenv("LOG_FORMAT"); format != "" {
-		config.OutputFormat = format
-	}
-}
-
-// loadRepositoryConfigurationFromEnvironment loads repository configuration
-func (m *ConfigurationManager) loadRepositoryConfigurationFromEnvironment(config *hephaestus.RepositoryConfiguration) {
-	if path := os.Getenv("REPO_PATH"); path != "" {
-		config.RepositoryPath = path
-	}
-	if maxFiles := os.Getenv("REPO_FILE_LIMIT"); maxFiles != "" {
-		if val, err := strconv.Atoi(maxFiles); err == nil {
-			config.FileLimit = val
+// loadClientConfigurationFromFile loads client configuration from a YAML file
+func (m *ConfigurationManager) loadClientConfigurationFromFile() error {
+	data, err := os.ReadFile(m.clientPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// If file doesn't exist, create with default configuration
+			return m.createDefaultClientConfiguration()
 		}
+		return fmt.Errorf("failed to read client configuration file: %v", err)
 	}
-	if maxFileSize := os.Getenv("REPO_FILE_SIZE_LIMIT"); maxFileSize != "" {
-		if val, err := strconv.ParseInt(maxFileSize, 10, 64); err == nil {
-			config.FileSizeLimit = val
-		}
+
+	var config hephaestus.ClientConfiguration
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("failed to parse client configuration file: %v", err)
 	}
+
+	return m.SetClientConfig(&config)
 }
 
-// SaveConfiguration saves the current configuration to a YAML file
+// SaveConfiguration saves both native and client configurations to YAML files
 func (m *ConfigurationManager) SaveConfiguration() error {
-	if m.config == nil {
+	if m.nativeConfig == nil || m.clientConfig == nil {
 		return fmt.Errorf("no configuration to save")
 	}
 
-	// Ensure directory exists
-	dir := filepath.Dir(m.path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create configuration directory: %v", err)
+	// Save native configuration
+	if err := m.saveNativeConfiguration(); err != nil {
+		return fmt.Errorf("failed to save native configuration: %v", err)
 	}
 
-	data, err := yaml.Marshal(m.config)
-	if err != nil {
-		return fmt.Errorf("failed to marshal configuration: %v", err)
-	}
-
-	if err := os.WriteFile(m.path, data, 0600); err != nil {
-		return fmt.Errorf("failed to write configuration file: %v", err)
+	// Save client configuration
+	if err := m.saveClientConfiguration(); err != nil {
+		return fmt.Errorf("failed to save client configuration: %v", err)
 	}
 
 	return nil
 }
 
-// createDefaultConfiguration creates a new configuration file with default values
-func (m *ConfigurationManager) createDefaultConfiguration() error {
-	defaultConfig := GetDefaultConfiguration()
-	if err := m.Set(defaultConfig); err != nil {
+// saveNativeConfiguration saves the native configuration to a YAML file
+func (m *ConfigurationManager) saveNativeConfiguration() error {
+	// Ensure directory exists
+	dir := filepath.Dir(m.nativePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create native configuration directory: %v", err)
+	}
+
+	data, err := yaml.Marshal(m.nativeConfig)
+	if err != nil {
+		return fmt.Errorf("failed to marshal native configuration: %v", err)
+	}
+
+	if err := os.WriteFile(m.nativePath, data, 0600); err != nil {
+		return fmt.Errorf("failed to write native configuration file: %v", err)
+	}
+
+	return nil
+}
+
+// saveClientConfiguration saves the client configuration to a YAML file
+func (m *ConfigurationManager) saveClientConfiguration() error {
+	// Ensure directory exists
+	dir := filepath.Dir(m.clientPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create client configuration directory: %v", err)
+	}
+
+	data, err := yaml.Marshal(m.clientConfig)
+	if err != nil {
+		return fmt.Errorf("failed to marshal client configuration: %v", err)
+	}
+
+	if err := os.WriteFile(m.clientPath, data, 0600); err != nil {
+		return fmt.Errorf("failed to write client configuration file: %v", err)
+	}
+
+	return nil
+}
+
+// createDefaultNativeConfiguration creates a new native configuration file with default values
+func (m *ConfigurationManager) createDefaultNativeConfiguration() error {
+	defaultConfig := GetDefaultNativeConfiguration()
+	if err := m.SetNativeConfig(defaultConfig); err != nil {
 		return err
 	}
-	return m.SaveConfiguration()
+	return m.saveNativeConfiguration()
 }
 
-// GetDefaultConfigPath returns the default path for the configuration file
-func GetDefaultConfigPath() string {
-	if customPath := os.Getenv("HEPHAESTUS_CONFIG_PATH"); customPath != "" {
-		return customPath
+// createDefaultClientConfiguration creates a new client configuration file with default values
+func (m *ConfigurationManager) createDefaultClientConfiguration() error {
+	defaultConfig := GetDefaultClientConfiguration()
+	if err := m.SetClientConfig(defaultConfig); err != nil {
+		return err
 	}
+	return m.saveClientConfiguration()
+}
+
+// GetDefaultNativeConfigPath returns the default path for the native configuration file
+func GetDefaultNativeConfigPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ".hephaestus/config.yaml"
+		return ".hephaestus/native_config.yaml"
 	}
-	return filepath.Join(home, ".hephaestus", "config.yaml")
+	return filepath.Join(home, ".hephaestus", "native_config.yaml")
 }
 
-// GetDefaultConfiguration returns a default configuration
-func GetDefaultConfiguration() *hephaestus.SystemConfiguration {
+// GetDefaultClientConfigPath returns the default path for the client configuration file
+func GetDefaultClientConfigPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ".hephaestus/client_config.yaml"
+	}
+	return filepath.Join(home, ".hephaestus", "client_config.yaml")
+}
+
+// GetDefaultNativeConfiguration returns a default native configuration
+func GetDefaultNativeConfiguration() *hephaestus.SystemConfiguration {
 	return &hephaestus.SystemConfiguration{
-		RemoteSettings: hephaestus.RemoteRepositoryConfiguration{
-			TargetBranch: "main",
+		Model: hephaestus.ModelConfiguration{
+			Provider:    "openai",
+			ModelVersion: "gpt-4",
 		},
-		LoggingSettings: hephaestus.LoggingConfiguration{
-			LogLevel:     "info",
-			OutputFormat: "json",
-		},
-		RepositorySettings: hephaestus.RepositoryConfiguration{
-			FileLimit:     10000,
-			FileSizeLimit: 1048576, // 1MB
+		LogSettings: hephaestus.LogProcessingConfiguration{
+			ThresholdLevel:  "error",
+			ThresholdCount:  5,
+			ThresholdWindow: 300 * time.Second,
 		},
 		OperationalMode: "suggest",
 	}
 }
 
-// ValidateConfiguration validates the configuration file exists and is readable
+// GetDefaultClientConfiguration returns a default client configuration
+func GetDefaultClientConfiguration() *hephaestus.ClientConfiguration {
+	return &hephaestus.ClientConfiguration{
+		Logging: hephaestus.LoggingConfiguration{
+			Level:  "info",
+			Format: "json",
+		},
+		Repository: hephaestus.RepositoryConfiguration{
+			FileLimit:     10000,
+			FileSizeLimit: 1048576, // 1MB
+		},
+		BaseURL: "http://localhost:8080",
+	}
+}
+
+// ValidateConfiguration validates both configuration files exist and are readable
 func (m *ConfigurationManager) ValidateConfiguration() error {
-	info, err := os.Stat(m.path)
+	// Validate native configuration
+	nativeInfo, err := os.Stat(m.nativePath)
 	if err != nil {
-		return fmt.Errorf("configuration file not found: %v", err)
+		return fmt.Errorf("native configuration file not found: %v", err)
+	}
+	if nativeInfo.Mode().Perm()&0077 != 0 {
+		return fmt.Errorf("native configuration file has incorrect permissions: %v", nativeInfo.Mode().Perm())
 	}
 
-	// Check file permissions
-	if info.Mode().Perm()&0077 != 0 {
-		return fmt.Errorf("configuration file has incorrect permissions: %v", info.Mode().Perm())
+	// Validate client configuration
+	clientInfo, err := os.Stat(m.clientPath)
+	if err != nil {
+		return fmt.Errorf("client configuration file not found: %v", err)
+	}
+	if clientInfo.Mode().Perm()&0077 != 0 {
+		return fmt.Errorf("client configuration file has incorrect permissions: %v", clientInfo.Mode().Perm())
 	}
 
 	return nil

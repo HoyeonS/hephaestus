@@ -5,16 +5,23 @@ import (
 	"time"
 )
 
-// SystemConfiguration represents the system configuration
+// SystemConfiguration represents the native Hephaestus configuration
 type SystemConfiguration struct {
+	// Model Settings
+	Model ModelConfiguration `json:"model" yaml:"model"`
+
 	// Log Processing Settings
 	LogSettings LogProcessingConfiguration `json:"log" yaml:"log"`
 
 	// Operation Mode
 	OperationalMode string `json:"mode" yaml:"mode"`
+}
 
-	// Remote Repository Settings (for deploy mode)
-	RemoteRepoSettings RemoteRepoConfiguration `json:"remote_repo" yaml:"remote_repo"`
+// ModelConfiguration contains model settings
+type ModelConfiguration struct {
+	Provider    string `json:"provider" yaml:"provider"`
+	APIKey      string `json:"api_key" yaml:"api_key"`
+	ModelVersion string `json:"model_version" yaml:"model_version"`
 }
 
 // LogProcessingConfiguration contains log processing settings
@@ -22,22 +29,6 @@ type LogProcessingConfiguration struct {
 	ThresholdLevel  string        `json:"threshold_level" yaml:"threshold_level"`
 	ThresholdCount  int           `json:"threshold_count" yaml:"threshold_count"`
 	ThresholdWindow time.Duration `json:"threshold_window" yaml:"threshold_window"`
-}
-
-// RemoteRepoConfiguration contains remote repository settings
-type RemoteRepoConfiguration struct {
-	Token      string            `json:"token" yaml:"token"`
-	Owner      string            `json:"owner" yaml:"owner"`
-	Repository string            `json:"repository" yaml:"repository"`
-	Branch     string            `json:"branch" yaml:"branch"`
-	PRSettings PullRequestConfig `json:"pr" yaml:"pr"`
-}
-
-// PullRequestConfig contains pull request settings
-type PullRequestConfig struct {
-	TitleTemplate  string   `json:"title_template" yaml:"title_template"`
-	BranchTemplate string   `json:"branch_template" yaml:"branch_template"`
-	Labels         []string `json:"labels" yaml:"labels"`
 }
 
 // LogEntry represents a log entry
@@ -96,6 +87,17 @@ func ValidateSystemConfiguration(config *SystemConfiguration) error {
 		return &ConfigurationValidationError{FieldName: "config", ErrorMessage: "configuration cannot be nil"}
 	}
 
+	// Validate model settings
+	if config.Model.Provider == "" {
+		return &ConfigurationValidationError{FieldName: "model.provider", ErrorMessage: "model provider is required"}
+	}
+	if config.Model.APIKey == "" {
+		return &ConfigurationValidationError{FieldName: "model.api_key", ErrorMessage: "model API key is required"}
+	}
+	if config.Model.ModelVersion == "" {
+		return &ConfigurationValidationError{FieldName: "model.model_version", ErrorMessage: "model version is required"}
+	}
+
 	// Validate log settings
 	if config.LogSettings.ThresholdLevel == "" {
 		return &ConfigurationValidationError{FieldName: "log.threshold_level", ErrorMessage: "log threshold level is required"}
@@ -113,22 +115,6 @@ func ValidateSystemConfiguration(config *SystemConfiguration) error {
 	// Validate mode
 	if !isValidMode(config.OperationalMode) {
 		return &ConfigurationValidationError{FieldName: "mode", ErrorMessage: "invalid operational mode"}
-	}
-
-	// Validate remote repository settings if in deploy mode
-	if config.OperationalMode == "deploy" {
-		if config.RemoteRepoSettings.Token == "" {
-			return &ConfigurationValidationError{FieldName: "remote_repo.token", ErrorMessage: "remote repository token is required in deploy mode"}
-		}
-		if config.RemoteRepoSettings.Owner == "" {
-			return &ConfigurationValidationError{FieldName: "remote_repo.owner", ErrorMessage: "remote repository owner is required in deploy mode"}
-		}
-		if config.RemoteRepoSettings.Repository == "" {
-			return &ConfigurationValidationError{FieldName: "remote_repo.repository", ErrorMessage: "remote repository name is required in deploy mode"}
-		}
-		if config.RemoteRepoSettings.Branch == "" {
-			config.RemoteRepoSettings.Branch = "main"
-		}
 	}
 
 	return nil
