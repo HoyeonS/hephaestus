@@ -6,33 +6,41 @@ import (
 	"time"
 )
 
-// Config represents the configuration for the Hephaestus service
-type Config struct {
-	Repository *RepositoryConfig `yaml:"repository"`
-	Model      *ModelConfig      `yaml:"model"`
-	Log        *LogConfig        `yaml:"log"`
+// SystemConfiguration represents the complete system configuration
+type SystemConfiguration struct {
+	RemoteSettings     RemoteRepositoryConfiguration `json:"remote" yaml:"remote"`
+	ModelSettings      ModelServiceConfiguration     `json:"model" yaml:"model"`
+	LoggingSettings    LoggingConfiguration          `json:"log" yaml:"log"`
+	OperationalMode    string                        `json:"mode" yaml:"mode"`
+	RepositorySettings RepositoryConfiguration       `json:"repository" yaml:"repository"`
 }
 
-// RepositoryConfig represents the configuration for the repository service
-type RepositoryConfig struct {
-	Type     string `yaml:"type"`
-	URL      string `yaml:"url"`
-	Token    string `yaml:"token"`
-	Branch   string `yaml:"branch"`
-	BasePath string `yaml:"base_path"`
+// RemoteRepositoryConfiguration contains remote repository integration settings
+type RemoteRepositoryConfiguration struct {
+	AuthToken       string `json:"token" yaml:"token"`
+	RepositoryOwner string `json:"owner" yaml:"owner"`
+	RepositoryName  string `json:"repository" yaml:"repository"`
+	TargetBranch    string `json:"branch" yaml:"branch"`
 }
 
-// ModelConfig represents the configuration for the model service
-type ModelConfig struct {
-	Provider string `yaml:"provider"`
-	APIKey   string `yaml:"api_key"`
-	Model    string `yaml:"model"`
+// ModelServiceConfiguration contains model service provider settings
+type ModelServiceConfiguration struct {
+	ServiceProvider string `json:"provider" yaml:"provider"`
+	ServiceAPIKey   string `json:"api_key" yaml:"api_key"`
+	ModelVersion    string `json:"model_version" yaml:"model_version"`
 }
 
-// LogConfig represents the configuration for logging
-type LogConfig struct {
-	Level  string `yaml:"level"`
-	Output string `yaml:"output"`
+// LoggingConfiguration contains logging system settings
+type LoggingConfiguration struct {
+	LogLevel     string `json:"level" yaml:"level"`
+	OutputFormat string `json:"format" yaml:"format"`
+}
+
+// RepositoryConfiguration contains repository management settings
+type RepositoryConfiguration struct {
+	RepositoryPath string `json:"path" yaml:"path"`
+	FileLimit      int    `json:"max_files" yaml:"max_files"`
+	FileSizeLimit  int64  `json:"max_file_size" yaml:"max_file_size"`
 }
 
 // NodeStatus represents the operational status of a node
@@ -149,43 +157,6 @@ const (
 	NodeStatusInactive     NodeOperationalStatus = "inactive"
 	NodeStatusError        NodeOperationalStatus = "error"
 )
-
-// SystemConfiguration represents the complete configuration for a Hephaestus node
-type SystemConfiguration struct {
-	RemoteSettings     RemoteRepositoryConfiguration `json:"remote" yaml:"remote"`
-	ModelSettings      ModelServiceConfiguration     `json:"model" yaml:"model"`
-	LoggingSettings    LoggingConfiguration          `json:"log" yaml:"log"`
-	OperationalMode    string                        `json:"mode" yaml:"mode"`
-	RepositorySettings RepositoryConfiguration       `json:"repository" yaml:"repository"`
-}
-
-// RemoteRepositoryConfiguration contains remote repository integration settings
-type RemoteRepositoryConfiguration struct {
-	AuthToken       string `json:"token" yaml:"token"`
-	RepositoryOwner string `json:"owner" yaml:"owner"`
-	RepositoryName  string `json:"repository" yaml:"repository"`
-	TargetBranch    string `json:"branch" yaml:"branch"`
-}
-
-// ModelServiceConfiguration contains model service provider settings
-type ModelServiceConfiguration struct {
-	ServiceProvider string `json:"provider" yaml:"provider"`
-	ServiceAPIKey   string `json:"api_key" yaml:"api_key"`
-	ModelVersion    string `json:"model_version" yaml:"model_version"`
-}
-
-// LoggingConfiguration contains logging system settings
-type LoggingConfiguration struct {
-	LogLevel     string `json:"level" yaml:"level"`
-	OutputFormat string `json:"format" yaml:"format"`
-}
-
-// RepositoryConfiguration contains repository management settings
-type RepositoryConfiguration struct {
-	RepositoryPath string `json:"path" yaml:"path"`
-	FileLimit      int    `json:"max_files" yaml:"max_files"`
-	FileSizeLimit  int64  `json:"max_file_size" yaml:"max_file_size"`
-}
 
 // RepositoryFileNode represents a file in the virtual repository system
 type RepositoryFileNode struct {

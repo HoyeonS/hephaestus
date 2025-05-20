@@ -69,16 +69,36 @@ func (p *Processor) Initialize(ctx context.Context, config hephaestus.LoggingCon
 	return nil
 }
 
+// isValidLogLevel checks if the provided log level is valid
+func isValidLogLevel(level string) bool {
+	validLevels := map[string]bool{
+		"debug": true,
+		"info":  true,
+		"warn":  true,
+		"error": true,
+	}
+	return validLevels[level]
+}
+
+// isValidOutputFormat checks if the provided output format is valid
+func isValidOutputFormat(format string) bool {
+	validFormats := map[string]bool{
+		"json": true,
+		"text": true,
+	}
+	return validFormats[format]
+}
+
 // CreateStream creates a new log processing stream for a node
-func (p *Processor) CreateStream(ctx context.Context, nodeID string) error {
+func (p *Processor) CreateStream(nodeID string) error {
 	p.streamMutex.Lock()
 	defer p.streamMutex.Unlock()
 
 	if _, exists := p.streams[nodeID]; exists {
-		return fmt.Errorf("stream already exists for node: %s", nodeID)
+		return fmt.Errorf("stream already exists for node %s", nodeID)
 	}
 
-	stream := &LogStream{
+	p.streams[nodeID] = &LogStream{
 		NodeID:       nodeID,
 		LogLevel:     p.config.LogLevel,
 		OutputFormat: p.config.OutputFormat,
@@ -87,41 +107,70 @@ func (p *Processor) CreateStream(ctx context.Context, nodeID string) error {
 		IsActive:     true,
 	}
 
-	p.streams[nodeID] = stream
 	return nil
 }
 
-// ProcessLogs processes a batch of log entries for a node
-func (p *Processor) ProcessLogs(ctx context.Context, nodeID string, logs []string) error {
+// CloseStream closes a log processing stream
+func (p *Processor) CloseStream(nodeID string) error {
 	p.streamMutex.Lock()
 	defer p.streamMutex.Unlock()
 
+	if stream, exists := p.streams[nodeID]; exists {
+		stream.IsActive = false
+		delete(p.streams, nodeID)
+		return nil
+	}
+
+	return fmt.Errorf("stream not found for node %s", nodeID)
+}
+
+// ProcessLogEntry processes a log entry for a specific node
+func (p *Processor) ProcessLogEntry(nodeID string, entry LogEntry) error {
+	p.streamMutex.RLock()
 	stream, exists := p.streams[nodeID]
+	p.streamMutex.RUnlock()
+
 	if !exists {
-		return fmt.Errorf("stream not found for node: %s", nodeID)
+		return fmt.Errorf("stream not found for node %s", nodeID)
 	}
 
 	if !stream.IsActive {
-		return fmt.Errorf("stream is not active for node: %s", nodeID)
+		return fmt.Errorf("stream is not active for node %s", nodeID)
 	}
 
-	// Process each log entry
-	for _, logStr := range logs {
-		entry, err := p.parseLogEntry(logStr)
-		if err != nil {
-			continue // Skip invalid entries
-		}
-
-		// Check if log level meets threshold
-		if !isLogLevelMet(entry.Level, stream.LogLevel) {
-			continue
-		}
-
-		entry.ProcessedAt = time.Now()
-		stream.Buffer = append(stream.Buffer, entry)
-	}
-
+	// Update last activity
 	stream.LastActivity = time.Now()
+
+	// Add to buffer
+	stream.Buffer = append(stream.Buffer, entry)
+
+	// Process based on output format
+	switch stream.OutputFormat {
+	case "json":
+		return p.processJSONLog(entry)
+	case "text":
+		return p.processTextLog(entry)
+	default:
+		return fmt.Errorf("unsupported output format: %s", stream.OutputFormat)
+	}
+}
+
+// processJSONLog processes a log entry in JSON format
+func (p *Processor) processJSONLog(entry LogEntry) error {
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return fmt.Errorf("failed to marshal log entry: %v", err)
+	}
+
+	// TODO: Implement actual output handling
+	fmt.Println(string(data))
+	return nil
+}
+
+// processTextLog processes a log entry in text format
+func (p *Processor) processTextLog(entry LogEntry) error {
+	// TODO: Implement actual output handling
+	fmt.Printf("[%s] %s: %s\n", entry.Timestamp.Format(time.RFC3339), entry.Level, entry.Message)
 	return nil
 }
 
@@ -175,70 +224,4 @@ func (p *Processor) Cleanup(ctx context.Context, nodeID string) error {
 	delete(p.streams, nodeID)
 
 	return nil
-}
-
-// Helper functions
-
-func (p *Processor) parseLogEntry(logStr string) (LogEntry, error) {
-	var entry LogEntry
-
-	// Try parsing as JSON first
-	if err := json.Unmarshal([]byte(logStr), &entry); err == nil {
-		return entry, nil
-	}
-
-	// Fallback to basic parsing
-	entry = LogEntry{
-		Timestamp: time.Now(),
-		Message:   logStr,
-		Level:     "info", // Default level
-		Context:   make(map[string]interface{}),
-	}
-
-	return entry, nil
-}
-
-func isValidLogLevel(level string) bool {
-	validLevels := map[string]bool{
-		"debug": true,
-		"info":  true,
-		"warn":  true,
-		"error": true,
-		"fatal": true,
-	}
-
-	return validLevels[level]
-}
-
-func isValidOutputFormat(format string) bool {
-	validFormats := map[string]bool{
-		"json":     true,
-		"text":     true,
-		"logfmt":   true,
-		"template": true,
-	}
-
-	return validFormats[format]
-}
-
-func isLogLevelMet(logLevel, thresholdLevel string) bool {
-	levels := map[string]int{
-		"debug": 0,
-		"info":  1,
-		"warn":  2,
-		"error": 3,
-		"fatal": 4,
-	}
-
-	logValue, exists := levels[logLevel]
-	if !exists {
-		return false
-	}
-
-	thresholdValue, exists := levels[thresholdLevel]
-	if !exists {
-		return false
-	}
-
-	return logValue >= thresholdValue
 } 

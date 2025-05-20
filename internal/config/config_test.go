@@ -15,38 +15,41 @@ func TestConfigManager(t *testing.T) {
 
 	t.Run("Set and Get", func(t *testing.T) {
 		manager := NewConfigurationManager()
-		config := &hephaestus.Config{
-			Repository: &hephaestus.RepositoryConfig{
-				Token:    "token",
-				URL:      "ttps://github.com/owner/repo",
-				Type:     "type",
-				Branch:   "main",
-				BasePath: "/",
+		config := &hephaestus.SystemConfiguration{
+			RemoteSettings: hephaestus.RemoteRepositoryConfiguration{
+				AuthToken:       "token",
+				RepositoryOwner: "owner",
+				RepositoryName:  "repo",
+				TargetBranch:    "main",
 			},
-			Model: &hephaestus.ModelConfig{
-				Provider: "aiprovider",
-				APIKey:   "key",
-				Model:    "model",
+			ModelSettings: hephaestus.ModelServiceConfiguration{
+				ServiceProvider: "openai",
+				ServiceAPIKey:   "key",
+				ModelVersion:    "gpt-4",
 			},
-			Log: &hephaestus.LogConfig{
-				Level:  "info",
-				Output: "json",
+			LoggingSettings: hephaestus.LoggingConfiguration{
+				LogLevel:     "info",
+				OutputFormat: "json",
 			},
+			RepositorySettings: hephaestus.RepositoryConfiguration{
+				RepositoryPath: "/path/to/repo",
+				FileLimit:      10000,
+				FileSizeLimit:  1048576,
+			},
+			OperationalMode: "suggest",
 		}
-		systemConfig, err := SystemConfigurationFactory(config, "")
-		assert.NoError(t, err)
-		err = manager.Set(systemConfig)
+		err := manager.Set(config)
 		assert.NoError(t, err)
 
 		got := manager.Get()
-		assert.Equal(t, systemConfig, got)
+		assert.Equal(t, config, got)
 	})
 }
 
 func TestConfigValidation(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *hephaestus.Config
+		config      *hephaestus.SystemConfiguration
 		wantErr     bool
 		errContains string
 	}{
@@ -54,96 +57,108 @@ func TestConfigValidation(t *testing.T) {
 			name:        "nil config",
 			config:      nil,
 			wantErr:     true,
-			errContains: "config cannot be nil",
+			errContains: "configuration is nil",
 		},
 		{
 			name: "missing GitHub token",
-			config: &hephaestus.Config{
-				Repository: &hephaestus.RepositoryConfig{
-					Token:    "",
-					URL:      "ttps://github.com/owner/repo",
-					Type:     "type",
-					Branch:   "main",
-					BasePath: "/",
+			config: &hephaestus.SystemConfiguration{
+				RemoteSettings: hephaestus.RemoteRepositoryConfiguration{
+					AuthToken:       "",
+					RepositoryOwner: "owner",
+					RepositoryName:  "repo",
+					TargetBranch:    "main",
 				},
-				Model: &hephaestus.ModelConfig{
-					Provider: "aiprovider",
-					APIKey:   "key",
-					Model:    "model",
+				ModelSettings: hephaestus.ModelServiceConfiguration{
+					ServiceProvider: "openai",
+					ServiceAPIKey:   "key",
+					ModelVersion:    "gpt-4",
 				},
-				Log: &hephaestus.LogConfig{
-					Level:  "info",
-					Output: "json",
+				LoggingSettings: hephaestus.LoggingConfiguration{
+					LogLevel:     "info",
+					OutputFormat: "json",
 				},
+				RepositorySettings: hephaestus.RepositoryConfiguration{
+					RepositoryPath: "/path/to/repo",
+				},
+				OperationalMode: "suggest",
 			},
 			wantErr:     true,
 			errContains: "remote auth token is required",
 		},
 		{
 			name: "missing AI provider",
-			config: &hephaestus.Config{
-				Repository: &hephaestus.RepositoryConfig{
-					Token:    "token",
-					URL:      "ttps://github.com/owner/repo",
-					Type:     "type",
-					Branch:   "main",
-					BasePath: "/",
+			config: &hephaestus.SystemConfiguration{
+				RemoteSettings: hephaestus.RemoteRepositoryConfiguration{
+					AuthToken:       "token",
+					RepositoryOwner: "owner",
+					RepositoryName:  "repo",
+					TargetBranch:    "main",
 				},
-				Model: &hephaestus.ModelConfig{
-					Provider: "",
-					APIKey:   "key",
-					Model:    "model",
+				ModelSettings: hephaestus.ModelServiceConfiguration{
+					ServiceProvider: "",
+					ServiceAPIKey:   "key",
+					ModelVersion:    "gpt-4",
 				},
-				Log: &hephaestus.LogConfig{
-					Level:  "info",
-					Output: "json",
+				LoggingSettings: hephaestus.LoggingConfiguration{
+					LogLevel:     "info",
+					OutputFormat: "json",
 				},
+				RepositorySettings: hephaestus.RepositoryConfiguration{
+					RepositoryPath: "/path/to/repo",
+				},
+				OperationalMode: "suggest",
 			},
 			wantErr:     true,
 			errContains: "model service provider is required",
 		},
 		{
 			name: "invalid log level",
-			config: &hephaestus.Config{
-				Repository: &hephaestus.RepositoryConfig{
-					Token:    "token",
-					URL:      "ttps://github.com/owner/repo",
-					Type:     "type",
-					Branch:   "main",
-					BasePath: "/",
+			config: &hephaestus.SystemConfiguration{
+				RemoteSettings: hephaestus.RemoteRepositoryConfiguration{
+					AuthToken:       "token",
+					RepositoryOwner: "owner",
+					RepositoryName:  "repo",
+					TargetBranch:    "main",
 				},
-				Model: &hephaestus.ModelConfig{
-					Provider: "aiprovider",
-					APIKey:   "key",
-					Model:    "model",
+				ModelSettings: hephaestus.ModelServiceConfiguration{
+					ServiceProvider: "openai",
+					ServiceAPIKey:   "key",
+					ModelVersion:    "gpt-4",
 				},
-				Log: &hephaestus.LogConfig{
-					Level:  "",
-					Output: "json",
+				LoggingSettings: hephaestus.LoggingConfiguration{
+					LogLevel:     "invalid",
+					OutputFormat: "json",
 				},
+				RepositorySettings: hephaestus.RepositoryConfiguration{
+					RepositoryPath: "/path/to/repo",
+				},
+				OperationalMode: "suggest",
 			},
 			wantErr:     true,
 			errContains: "invalid log level",
 		},
 		{
 			name: "valid config",
-			config: &hephaestus.Config{
-				Repository: &hephaestus.RepositoryConfig{
-					Token:    "token",
-					URL:      "ttps://github.com/owner/repo",
-					Type:     "type",
-					Branch:   "main",
-					BasePath: "/",
+			config: &hephaestus.SystemConfiguration{
+				RemoteSettings: hephaestus.RemoteRepositoryConfiguration{
+					AuthToken:       "token",
+					RepositoryOwner: "owner",
+					RepositoryName:  "repo",
+					TargetBranch:    "main",
 				},
-				Model: &hephaestus.ModelConfig{
-					Provider: "aiprovider",
-					APIKey:   "key",
-					Model:    "model",
+				ModelSettings: hephaestus.ModelServiceConfiguration{
+					ServiceProvider: "openai",
+					ServiceAPIKey:   "key",
+					ModelVersion:    "gpt-4",
 				},
-				Log: &hephaestus.LogConfig{
-					Level:  "info",
-					Output: "json",
+				LoggingSettings: hephaestus.LoggingConfiguration{
+					LogLevel:     "info",
+					OutputFormat: "json",
 				},
+				RepositorySettings: hephaestus.RepositoryConfiguration{
+					RepositoryPath: "/path/to/repo",
+				},
+				OperationalMode: "suggest",
 			},
 			wantErr: false,
 		},
@@ -152,22 +167,13 @@ func TestConfigValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			manager := NewConfigurationManager()
-			if systemConfig, err := SystemConfigurationFactory(tt.config, ""); err != nil {
-				if tt.wantErr {
-					assert.Error(t, err)
-					assert.Contains(t, err.Error(), tt.errContains)
-				} else {
-					assert.NoError(t, err)
-				}
-			} else {
-				err := manager.Set(systemConfig)
+			err := manager.Set(tt.config)
 
-				if tt.wantErr {
-					assert.Error(t, err)
-					assert.Contains(t, err.Error(), tt.errContains)
-				} else {
-					assert.NoError(t, err)
-				}
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContains)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
