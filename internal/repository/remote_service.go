@@ -13,24 +13,24 @@ import (
 // RemoteService implements the RemoteRepositoryService interface
 type RemoteService struct {
 	// Dependencies
-	githubClient *github.Client
-	
+	remoteRepositoryClient *github.Client
+
 	// Configuration
 	config *hephaestus.RemoteRepositoryConfiguration
-	
+
 	// Active repositories
-	repositories     map[string]*Repository
+	repositories    map[string]*Repository
 	repositoryMutex sync.RWMutex
 }
 
 // Repository represents a remote repository instance
 type Repository struct {
-	Owner       string
-	Name        string
-	Branch      string
-	LastCommit  string
-	WorkingDir  string
-	IsArchived  bool
+	Owner      string
+	Name       string
+	Branch     string
+	LastCommit string
+	WorkingDir string
+	IsArchived bool
 }
 
 // NewRemoteService creates a new instance of the remote repository service
@@ -42,23 +42,23 @@ func NewRemoteService() *RemoteService {
 
 // Initialize sets up the remote repository service with the provided configuration
 func (s *RemoteService) Initialize(ctx context.Context, config hephaestus.RemoteRepositoryConfiguration) error {
-	if config.AuthToken == "" {
+	if config.ProviderToken == "" {
 		return fmt.Errorf("auth token is required")
 	}
 
-	if config.RepositoryOwner == "" || config.RepositoryName == "" {
+	if config.RemoteRepositoryOwner == "" || config.RemoteRepositoryName == "" {
 		return fmt.Errorf("repository owner and name are required")
 	}
 
 	// Create GitHub client
 	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: config.AuthToken},
+		&oauth2.Token{AccessToken: config.ProviderToken},
 	)
 	tc := oauth2.NewClient(ctx, ts)
-	s.githubClient = github.NewClient(tc)
+	s.remoteRepositoryClient = github.NewClient(tc)
 
 	// Verify repository access
-	repo, _, err := s.githubClient.Repositories.Get(ctx, config.RepositoryOwner, config.RepositoryName)
+	repo, _, err := s.remoteRepositoryClient.Repositories.Get(ctx, config.RemoteRepositoryOwner, config.RemoteRepositoryName)
 	if err != nil {
 		return fmt.Errorf("failed to access repository: %v", err)
 	}
@@ -207,9 +207,9 @@ func (s *RemoteService) CreatePullRequest(ctx context.Context, nodeID string, ti
 	// Create pull request
 	newPR := &github.NewPullRequest{
 		Title:               github.String(title),
-		Head:               github.String(branchName),
-		Base:               github.String(repo.Branch),
-		Body:               github.String(description),
+		Head:                github.String(branchName),
+		Base:                github.String(repo.Branch),
+		Body:                github.String(description),
 		MaintainerCanModify: github.Bool(true),
 	}
 
@@ -232,4 +232,4 @@ func (s *RemoteService) Cleanup(ctx context.Context, nodeID string) error {
 
 	delete(s.repositories, nodeID)
 	return nil
-} 
+}

@@ -45,6 +45,8 @@ type LogProcessingConfiguration struct {
 type RemoteRepositoryConfiguration struct {
 	RemoteRepositoryProvider string `json:"remote_repository_provider" yaml: "remote_repository_provider"`
 	RepositoryAddress        string `json:"address" yaml:"address"`
+	RemoteRepositoryOwner    string `json:"owner" yaml:"owner"`
+	RemoteRepositoryName     string `json:"repo_name" yaml:"repo_name"`
 	BaseDirectory            string `json:"base_dir" yaml:"base_dir"`
 	ProviderToken            string `json:"provider_token" yaml:"provider_token"`
 }
@@ -67,19 +69,6 @@ type Solution struct {
 	CodeChanges []Change  `json:"code_changes"`
 	GeneratedAt time.Time `json:"generated_at"`
 	Confidence  float64   `json:"confidence"`
-}
-
-// Node processing hephaestus log ingestion flow
-type Node struct {
-	clientNodeConfig *ClientNodeConfiguration
-	status           NodeStatus
-	// Log processing
-	logBuffer     []LogEntry
-	lastProcessed time.Time
-
-	// Solution processing
-	solutionChan chan *Solution
-	errorChan    chan error
 }
 
 // Change represents a code change

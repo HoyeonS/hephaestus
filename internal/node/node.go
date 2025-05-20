@@ -8,13 +8,30 @@ import (
 	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
 )
 
+// Node processing hephaestus log ingestion flow
+type Node struct {
+	systemConfig     *hephaestus.SystemConfiguration
+	clientNodeConfig *hephaestus.ClientNodeConfiguration
+	status           hephaestus.NodeStatus
+	// Log processing
+	logBuffer     []hephaestus.LogEntry
+	lastProcessed time.Time
+
+	// Solution processing
+	solutionChan chan *hephaestus.Solution
+	errorChan    chan error
+}
+
 // NewNode creates a new Hephaestus node
 func NewNode(systemConfig *hephaestus.SystemConfiguration, clientNodeConfig *hephaestus.ClientNodeConfiguration) (*Node, error) {
+	if err := hephaestus.ValidateClientNodeConfiguration(clientNodeConfig); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %v", err)
+	}
 	if err := hephaestus.ValidateSystemConfiguration(systemConfig); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %v", err)
 	}
 
-	return &hephaestus.Node{
+	return &Node{
 		clientNodeConfig: clientNodeConfig,
 		status:           hephaestus.NodeStatusInitializing,
 		logBuffer:        make([]hephaestus.LogEntry, 0),
@@ -28,7 +45,7 @@ func NewNode(systemConfig *hephaestus.SystemConfiguration, clientNodeConfig *hep
 func (n *Node) Start(ctx context.Context) error {
 	n.status = hephaestus.NodeStatusOperational
 	// Start log processing
-	go n.processLogs(ctx)
+	// go n.processLogs(ctx)
 
 	return nil
 }
