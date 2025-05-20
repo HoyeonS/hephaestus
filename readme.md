@@ -2,6 +2,269 @@
 
 A log processing and solution generation system that monitors logs, detects patterns, and generates solutions.
 
+## Architecture Design
+
+### System Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Client Application                        │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         Hephaestus Node                          │
+│                                                                  │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐  │
+│  │  Log Buffer │───▶│  Processor  │───▶│  Solution Generator │  │
+│  └─────────────┘    └─────────────┘    └─────────────────────┘  │
+│         │                 │                      │               │
+│         │                 │                      │               │
+│         ▼                 ▼                      ▼               │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐  │
+│  │  Threshold  │    │  Pattern    │    │  Code Change        │  │
+│  │  Monitor    │    │  Detector   │    │  Generator          │  │
+│  └─────────────┘    └─────────────┘    └─────────────────────┘  │
+│                                                                  │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Remote Repository                            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Component Interaction Flow
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Client    │     │    Node     │     │  Remote     │
+│ Application │     │             │     │ Repository  │
+└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
+       │                   │                   │
+       │  Initialize       │                   │
+       │─────────────────▶│                   │
+       │                   │                   │
+       │  Process Log      │                   │
+       │─────────────────▶│                   │
+       │                   │                   │
+       │                   │  Buffer Log       │
+       │                   │──┐                │
+       │                   │  │                │
+       │                   │◀─┘                │
+       │                   │                   │
+       │                   │  Check Threshold  │
+       │                   │──┐                │
+       │                   │  │                │
+       │                   │◀─┘                │
+       │                   │                   │
+       │                   │  Generate Solution│
+       │                   │──┐                │
+       │                   │  │                │
+       │                   │◀─┘                │
+       │                   │                   │
+       │  Solution Ready   │                   │
+       │◀─────────────────│                   │
+       │                   │                   │
+       │                   │  Create PR        │
+       │                   │─────────────────▶│
+       │                   │                   │
+       │                   │  PR Created       │
+       │                   │◀─────────────────│
+       │                   │                   │
+       │  PR Status        │                   │
+       │◀─────────────────│                   │
+       │                   │                   │
+```
+
+## Low-Level Design
+
+### Client Integration
+
+1. **Initialization**
+```go
+// Client code
+type HephaestusClient struct {
+    node *node.Node
+    config *hephaestus.SystemConfiguration
+}
+
+func NewHephaestusClient(configPath string) (*HephaestusClient, error) {
+    // Load configuration
+    manager := config.NewConfigurationManager(configPath)
+    if err := manager.LoadConfiguration(); err != nil {
+        return nil, fmt.Errorf("failed to load configuration: %v", err)
+    }
+
+    // Create node
+    node, err := node.NewNode(manager.Get())
+    if err != nil {
+        return nil, fmt.Errorf("failed to create node: %v", err)
+    }
+
+    return &HephaestusClient{
+        node: node,
+        config: manager.Get(),
+    }, nil
+}
+```
+
+2. **Log Processing**
+```go
+// Client code
+func (c *HephaestusClient) ProcessLog(level, message string, context map[string]interface{}) error {
+    entry := hephaestus.LogEntry{
+        Timestamp:   time.Now(),
+        Level:       level,
+        Message:     message,
+        Context:     context,
+        ProcessedAt: time.Now(),
+    }
+
+    return c.node.ProcessLog(entry)
+}
+```
+
+3. **Solution Handling**
+```go
+// Client code
+func (c *HephaestusClient) Start(ctx context.Context) error {
+    // Start node
+    if err := c.node.Start(ctx); err != nil {
+        return fmt.Errorf("failed to start node: %v", err)
+    }
+
+    // Handle solutions
+    go func() {
+        for {
+            select {
+            case <-ctx.Done():
+                return
+            case solution := <-c.node.GetSolutions():
+                c.handleSolution(solution)
+            }
+        }
+    }()
+
+    // Handle errors
+    go func() {
+        for {
+            select {
+            case <-ctx.Done():
+                return
+            case err := <-c.node.GetErrors():
+                c.handleError(err)
+            }
+        }
+    }()
+
+    return nil
+}
+```
+
+### Internal Component Details
+
+1. **Log Buffer**
+```go
+type LogBuffer struct {
+    entries []hephaestus.LogEntry
+    mu      sync.RWMutex
+    config  *hephaestus.SystemConfiguration
+}
+
+func (b *LogBuffer) Add(entry hephaestus.LogEntry) {
+    b.mu.Lock()
+    defer b.mu.Unlock()
+    b.entries = append(b.entries, entry)
+}
+```
+
+2. **Threshold Monitor**
+```go
+type ThresholdMonitor struct {
+    buffer *LogBuffer
+    config *hephaestus.SystemConfiguration
+}
+
+func (m *ThresholdMonitor) Check() bool {
+    m.buffer.mu.RLock()
+    defer m.buffer.mu.RUnlock()
+
+    thresholdCount := 0
+    windowStart := time.Now().Add(-m.config.LogSettings.ThresholdWindow)
+
+    for _, entry := range m.buffer.entries {
+        if entry.Timestamp.After(windowStart) && 
+           entry.Level == m.config.LogSettings.ThresholdLevel {
+            thresholdCount++
+        }
+    }
+
+    return thresholdCount >= m.config.LogSettings.ThresholdCount
+}
+```
+
+3. **Solution Generator**
+```go
+type SolutionGenerator struct {
+    config *hephaestus.SystemConfiguration
+}
+
+func (g *SolutionGenerator) Generate(entries []hephaestus.LogEntry) (*hephaestus.Solution, error) {
+    // Analyze patterns
+    patterns := g.analyzePatterns(entries)
+    
+    // Generate code changes
+    changes := g.generateChanges(patterns)
+    
+    // Calculate confidence
+    confidence := g.calculateConfidence(patterns, changes)
+    
+    return &hephaestus.Solution{
+        ID:          fmt.Sprintf("sol-%d", time.Now().UnixNano()),
+        LogEntry:    entries[len(entries)-1],
+        Description: g.generateDescription(patterns),
+        CodeChanges: changes,
+        GeneratedAt: time.Now(),
+        Confidence:  confidence,
+    }, nil
+}
+```
+
+### Data Flow
+
+1. **Log Entry Flow**
+```
+Client → Log Buffer → Threshold Monitor → Pattern Detector → Solution Generator
+```
+
+2. **Solution Flow**
+```
+Solution Generator → Node → Client → Remote Repository (if deploy mode)
+```
+
+3. **Error Flow**
+```
+Any Component → Error Channel → Client Error Handler
+```
+
+### State Management
+
+1. **Node States**
+```
+Initializing → Operational → Processing → Operational/Error
+```
+
+2. **Solution States**
+```
+Generated → Validated → Deployed/Suggested
+```
+
+3. **Log States**
+```
+Received → Buffered → Processed → Archived
+```
+
 ## Features
 
 - **Log Processing**: Real-time log monitoring with configurable thresholds
