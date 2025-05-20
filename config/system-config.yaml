@@ -1,0 +1,12 @@
+# Hephaestus System Configuration
+
+# Model Service Configuration
+model:
+  service_provider: "openai"  # AI model provider (e.g., openai, anthropic)
+  service_api_key: ""  # API key for the model service
+  model_version: "gpt-4"  # Model version to use
+
+limit:
+  log_chunk_limit: 30
+  file_node_count_limit: 30
+  

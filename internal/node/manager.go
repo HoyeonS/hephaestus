@@ -11,7 +11,7 @@ import (
 )
 
 // Manager handles node registration and status tracking
-type Manager struct {
+type NodeManager struct {
 	nodes             map[string]*hephaestus.SystemNode
 	mu                sync.RWMutex
 	metricsCollector  hephaestus.MetricsCollectionService
@@ -19,8 +19,8 @@ type Manager struct {
 }
 
 // NewManager creates a new node manager instance
-func NewManager(metrics hephaestus.MetricsCollectionService, repo hephaestus.RepositoryManager) *Manager {
-	return &Manager{
+func NewManager(metrics hephaestus.MetricsCollectionService, repo hephaestus.RepositoryManager) *NodeManager {
+	return &NodeManager{
 		nodes:             make(map[string]*hephaestus.SystemNode),
 		metricsCollector:  metrics,
 		remoteRepoService: repo,
@@ -28,9 +28,9 @@ func NewManager(metrics hephaestus.MetricsCollectionService, repo hephaestus.Rep
 }
 
 // Initialize sets up the node manager
-func (m *Manager) Initialize(ctx context.Context) error {
+func (m *NodeManager) Initialize(ctx context.Context) error {
 	logger.Info(ctx, "Initializing node manager")
-	
+
 	if err := m.remoteRepoService.Initialize(ctx); err != nil {
 		logger.Error(ctx, "Failed to initialize remote repository service", logger.Field("error", err))
 		return fmt.Errorf("failed to initialize remote repository service: %v", err)
@@ -59,7 +59,7 @@ func (m *Manager) RegisterNode(ctx context.Context, node *hephaestus.SystemNode)
 	m.nodes[node.NodeID] = node
 	m.metricsCollector.RecordNodeStatus(node.NodeID, string(node.Status))
 
-	logger.Info(ctx, "Node registered successfully", 
+	logger.Info(ctx, "Node registered successfully",
 		logger.Field("node_id", node.NodeID),
 		logger.Field("status", string(node.Status)),
 	)
@@ -132,4 +132,4 @@ func (m *Manager) RemoveNode(ctx context.Context, nodeID string) error {
 	)
 
 	return nil
-} 
+}

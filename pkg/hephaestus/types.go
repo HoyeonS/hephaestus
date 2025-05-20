@@ -8,27 +8,45 @@ import (
 // SystemConfiguration represents the native Hephaestus configuration
 type SystemConfiguration struct {
 	// Model Settings
-	Model ModelConfiguration `json:"model" yaml:"model"`
+	ModelConfiguration ModelConfiguration `json:"model" yaml:"model"`
 
-	// Log Processing Settings
-	LogSettings LogProcessingConfiguration `json:"log" yaml:"log"`
-
-	// Operation Mode
-	OperationalMode string `json:"mode" yaml:"mode"`
+	// Limit Settings
+	LimitConfiguration LimitConfiguration `json:"limit" yaml:"limit"`
 }
 
 // ModelConfiguration contains model settings
 type ModelConfiguration struct {
-	Provider    string `json:"provider" yaml:"provider"`
-	APIKey      string `json:"api_key" yaml:"api_key"`
-	ModelVersion string `json:"model_version" yaml:"model_version"`
+	ModelServiceProvider string `json:"service_provider" yaml:"service_provider"`
+	ModelServiceAPIKey   string `json:"service_api_key" yaml:"service_api_key"`
+	ModelVersion         string `json:"model_version" yaml:"model_version"`
+}
+
+// RepositoryConfiguration contains repository settings
+type LimitConfiguration struct {
+	LogChunkLimit      int `json:"log_chunk_limit" yaml:"log_chunk_limit"`
+	FileNodeCountLimit int `json:"file_node_count_limit" yaml:"file_node_count_limit"`
+}
+
+// ClientConfiguration represents the client side Hephaestus Node Level configuration
+type ClientNodeConfiguration struct {
+	// Log Processing Settings
+	LogProcessingConfiguration LogProcessingConfiguration `json:"log" yaml:"log"`
+
+	// Remote Repository Settings
+	RemoteRepositoryConfiguration RemoteRepositoryConfiguration `json:"remote-repository" yaml:"remote-repository"`
 }
 
 // LogProcessingConfiguration contains log processing settings
 type LogProcessingConfiguration struct {
-	ThresholdLevel  string        `json:"threshold_level" yaml:"threshold_level"`
-	ThresholdCount  int           `json:"threshold_count" yaml:"threshold_count"`
-	ThresholdWindow time.Duration `json:"threshold_window" yaml:"threshold_window"`
+	ThresholdLevel string `json:"threshold_level" yaml:"threshold_level"`
+}
+
+// Remote Repository Provider contains remote repository code base connection settings
+type RemoteRepositoryConfiguration struct {
+	RemoteRepositoryProvider string `json:"remote_repository_provider" yaml: "remote_repository_provider"`
+	RepositoryAddress        string `json:"address" yaml:"address"`
+	BaseDirectory            string `json:"base_dir" yaml:"base_dir"`
+	ProviderToken            string `json:"provider_token" yaml:"provider_token"`
 }
 
 // LogEntry represents a log entry
@@ -38,17 +56,17 @@ type LogEntry struct {
 	Message     string                 `json:"message"`
 	Context     map[string]interface{} `json:"context"`
 	ErrorTrace  string                 `json:"error_trace,omitempty"`
-	ProcessedAt time.Time             `json:"processed_at"`
+	ProcessedAt time.Time              `json:"processed_at"`
 }
 
 // Solution represents a generated solution
 type Solution struct {
-	ID            string    `json:"id"`
-	LogEntry      LogEntry  `json:"log_entry"`
-	Description   string    `json:"description"`
-	CodeChanges   []Change  `json:"code_changes"`
-	GeneratedAt   time.Time `json:"generated_at"`
-	Confidence    float64   `json:"confidence"`
+	ID          string    `json:"id"`
+	LogEntry    LogEntry  `json:"log_entry"`
+	Description string    `json:"description"`
+	CodeChanges []Change  `json:"code_changes"`
+	GeneratedAt time.Time `json:"generated_at"`
+	Confidence  float64   `json:"confidence"`
 }
 
 // Change represents a code change
@@ -87,56 +105,13 @@ func ValidateSystemConfiguration(config *SystemConfiguration) error {
 		return &ConfigurationValidationError{FieldName: "config", ErrorMessage: "configuration cannot be nil"}
 	}
 
-	// Validate model settings
-	if config.Model.Provider == "" {
-		return &ConfigurationValidationError{FieldName: "model.provider", ErrorMessage: "model provider is required"}
-	}
-	if config.Model.APIKey == "" {
-		return &ConfigurationValidationError{FieldName: "model.api_key", ErrorMessage: "model API key is required"}
-	}
-	if config.Model.ModelVersion == "" {
-		return &ConfigurationValidationError{FieldName: "model.model_version", ErrorMessage: "model version is required"}
-	}
+	return nil
+}
 
-	// Validate log settings
-	if config.LogSettings.ThresholdLevel == "" {
-		return &ConfigurationValidationError{FieldName: "log.threshold_level", ErrorMessage: "log threshold level is required"}
-	}
-	if !isValidLogLevel(config.LogSettings.ThresholdLevel) {
-		return &ConfigurationValidationError{FieldName: "log.threshold_level", ErrorMessage: "invalid log threshold level"}
-	}
-	if config.LogSettings.ThresholdCount <= 0 {
-		return &ConfigurationValidationError{FieldName: "log.threshold_count", ErrorMessage: "threshold count must be positive"}
-	}
-	if config.LogSettings.ThresholdWindow <= 0 {
-		return &ConfigurationValidationError{FieldName: "log.threshold_window", ErrorMessage: "threshold window must be positive"}
-	}
-
-	// Validate mode
-	if !isValidMode(config.OperationalMode) {
-		return &ConfigurationValidationError{FieldName: "mode", ErrorMessage: "invalid operational mode"}
+func ValidateClientNodeConfiguration(config *ClientNodeConfiguration) error {
+	if config == nil {
+		return &ConfigurationValidationError{FieldName: "config", ErrorMessage: "configuration cannot be nil"}
 	}
 
 	return nil
 }
-
-// isValidLogLevel checks if the log level is valid
-func isValidLogLevel(level string) bool {
-	validLevels := map[string]bool{
-		"debug": true,
-		"info":  true,
-		"warn":  true,
-		"error": true,
-	}
-	return validLevels[level]
-}
-
-// isValidMode checks if the mode is valid
-func isValidMode(mode string) bool {
-	validModes := map[string]bool{
-		"suggest": true,
-		"deploy":  true,
-	}
-	return validModes[mode]
-}
- 

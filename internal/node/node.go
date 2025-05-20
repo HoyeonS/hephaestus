@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
@@ -11,13 +10,11 @@ import (
 
 // Node represents a Hephaestus node
 type Node struct {
-	config     *hephaestus.SystemConfiguration
-	status     hephaestus.NodeStatus
-	statusLock sync.RWMutex
-
+	systemConfig     *hephaestus.SystemConfiguration
+	clientNodeConfig *hephaestus.ClientNodeConfiguration
+	status           hephaestus.NodeStatus
 	// Log processing
 	logBuffer     []hephaestus.LogEntry
-	logBufferLock sync.RWMutex
 	lastProcessed time.Time
 
 	// Solution processing
@@ -26,41 +23,34 @@ type Node struct {
 }
 
 // NewNode creates a new Hephaestus node
-func NewNode(config *hephaestus.SystemConfiguration) (*Node, error) {
-	if err := hephaestus.ValidateSystemConfiguration(config); err != nil {
+func NewNode(systemConfig *hephaestus.SystemConfiguration, clientNodeConfig *hephaestus.ClientNodeConfiguration) (*Node, error) {
+	if err := hephaestus.ValidateSystemConfiguration(systemConfig); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %v", err)
 	}
 
 	return &Node{
-		config:        config,
-		status:        hephaestus.NodeStatusInitializing,
-		logBuffer:     make([]hephaestus.LogEntry, 0),
-		solutionChan:  make(chan *hephaestus.Solution, 100),
-		errorChan:     make(chan error, 100),
-		lastProcessed: time.Now(),
+		systemConfig:     systemConfig,
+		clientNodeConfig: clientNodeConfig,
+		status:           hephaestus.NodeStatusInitializing,
+		logBuffer:        make([]hephaestus.LogEntry, 0),
+		solutionChan:     make(chan *hephaestus.Solution, 100),
+		errorChan:        make(chan error, 100),
+		lastProcessed:    time.Now(),
 	}, nil
 }
 
 // Start initializes and starts the node
 func (n *Node) Start(ctx context.Context) error {
-	n.statusLock.Lock()
 	n.status = hephaestus.NodeStatusOperational
-	n.statusLock.Unlock()
-
 	// Start log processing
 	go n.processLogs(ctx)
-
-	// Start solution processing
-	go n.processSolutions(ctx)
 
 	return nil
 }
 
 // Stop gracefully stops the node
 func (n *Node) Stop(ctx context.Context) error {
-	n.statusLock.Lock()
 	n.status = hephaestus.NodeStatusError
-	n.statusLock.Unlock()
 
 	// Close channels
 	close(n.solutionChan)
@@ -71,14 +61,16 @@ func (n *Node) Stop(ctx context.Context) error {
 
 // ProcessLog processes a new log entry
 func (n *Node) ProcessLog(entry hephaestus.LogEntry) error {
-	n.logBufferLock.Lock()
-	defer n.logBufferLock.Unlock()
 
+	// Check if log chunk exceeded then remove the old logs
+	if len(n.logBuffer) == n.systemConfig.LimitConfiguration.LogChunkLimit {
+		n.logBuffer = n.logBuffer[1:]
+	}
 	// Add to buffer
 	n.logBuffer = append(n.logBuffer, entry)
 
 	// Check if we need to process logs
-	if n.shouldProcessLogs() {
+	if n.shouldProcessLogs(entry) {
 		return n.triggerLogProcessing()
 	}
 
@@ -86,17 +78,9 @@ func (n *Node) ProcessLog(entry hephaestus.LogEntry) error {
 }
 
 // shouldProcessLogs checks if we should process logs based on threshold
-func (n *Node) shouldProcessLogs() bool {
-	thresholdCount := 0
-	windowStart := time.Now().Add(-n.config.LogSettings.ThresholdWindow)
-
-	for _, entry := range n.logBuffer {
-		if entry.Timestamp.After(windowStart) && entry.Level == n.config.LogSettings.ThresholdLevel {
-			thresholdCount++
-		}
-	}
-
-	return thresholdCount >= n.config.LogSettings.ThresholdCount
+func (n *Node) shouldProcessLogs(entry hephaestus.LogEntry) bool {
+	// need to implement logic to cover higher cases
+	return n.clientNodeConfig.LogProcessingConfiguration.ThresholdLevel == entry.Level
 }
 
 // triggerLogProcessing triggers log processing
@@ -213,4 +197,4 @@ func (n *Node) GetStatus() hephaestus.NodeStatus {
 // GetErrors returns the error channel
 func (n *Node) GetErrors() <-chan error {
 	return n.errorChan
-} 
+}
