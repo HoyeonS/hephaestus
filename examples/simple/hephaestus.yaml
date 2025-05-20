@@ -1,0 +1,19 @@
+# Log Processing Settings
+log:
+  threshold_level: "error"    # Level that triggers solution generation
+  threshold_count: 3          # Number of threshold logs before triggering
+  threshold_window: "5m"      # Time window for threshold counting
+
+# Operation Mode
+mode: "suggest"              # suggest or deploy
+
+# Remote Repository Settings (required for deploy mode)
+remote_repo:
+  token: "your-repo-token"
+  owner: "your-org"
+  repository: "your-repo"
+  branch: "main"
+  pr:
+    title_template: "fix: {error_type}"
+    branch_template: "hephaestus/fix/{error_type}"
+    labels: ["hephaestus", "automated"] 

@@ -1,20 +1,36 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestConfigManager(t *testing.T) {
+func TestConfigurationManager(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "hephaestus-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
 	t.Run("New", func(t *testing.T) {
-		manager := NewConfigurationManager()
+		manager := NewConfigurationManager(configPath)
 		assert.NotNil(t, manager)
+		assert.Equal(t, configPath, manager.path)
+	})
+
+	t.Run("Default Path", func(t *testing.T) {
+		manager := NewConfigurationManager("")
+		assert.NotEmpty(t, manager.path)
 	})
 
 	t.Run("Set and Get", func(t *testing.T) {
-		manager := NewConfigurationManager()
+		manager := NewConfigurationManager(configPath)
 		config := &hephaestus.SystemConfiguration{
 			RemoteSettings: hephaestus.RemoteRepositoryConfiguration{
 				AuthToken:       "token",
@@ -43,6 +59,77 @@ func TestConfigManager(t *testing.T) {
 
 		got := manager.Get()
 		assert.Equal(t, config, got)
+	})
+
+	t.Run("Load and Save", func(t *testing.T) {
+		manager := NewConfigurationManager(configPath)
+		config := &hephaestus.SystemConfiguration{
+			RemoteSettings: hephaestus.RemoteRepositoryConfiguration{
+				AuthToken:       "token",
+				RepositoryOwner: "owner",
+				RepositoryName:  "repo",
+				TargetBranch:    "main",
+			},
+			ModelSettings: hephaestus.ModelServiceConfiguration{
+				ServiceProvider: "openai",
+				ServiceAPIKey:   "key",
+				ModelVersion:    "gpt-4",
+			},
+			LoggingSettings: hephaestus.LoggingConfiguration{
+				LogLevel:     "info",
+				OutputFormat: "json",
+			},
+			RepositorySettings: hephaestus.RepositoryConfiguration{
+				RepositoryPath: "/path/to/repo",
+				FileLimit:      10000,
+				FileSizeLimit:  1048576,
+			},
+			OperationalMode: "suggest",
+		}
+
+		// Save configuration
+		err := manager.Set(config)
+		require.NoError(t, err)
+		err = manager.SaveConfiguration()
+		require.NoError(t, err)
+
+		// Create new manager and load configuration
+		manager2 := NewConfigurationManager(configPath)
+		err = manager2.LoadConfiguration()
+		require.NoError(t, err)
+
+		// Compare configurations
+		assert.Equal(t, config, manager2.Get())
+	})
+
+	t.Run("Create Default Configuration", func(t *testing.T) {
+		manager := NewConfigurationManager(configPath)
+		err := manager.LoadConfiguration()
+		require.NoError(t, err)
+
+		config := manager.Get()
+		assert.NotNil(t, config)
+		assert.Equal(t, "main", config.RemoteSettings.TargetBranch)
+		assert.Equal(t, "info", config.LoggingSettings.LogLevel)
+		assert.Equal(t, "json", config.LoggingSettings.OutputFormat)
+		assert.Equal(t, 10000, config.RepositorySettings.FileLimit)
+		assert.Equal(t, int64(1048576), config.RepositorySettings.FileSizeLimit)
+		assert.Equal(t, "suggest", config.OperationalMode)
+	})
+
+	t.Run("Validate Configuration", func(t *testing.T) {
+		manager := NewConfigurationManager(configPath)
+		err := manager.LoadConfiguration()
+		require.NoError(t, err)
+
+		err = manager.ValidateConfiguration()
+		assert.NoError(t, err)
+
+		// Test with incorrect permissions
+		err = os.Chmod(configPath, 0777)
+		require.NoError(t, err)
+		err = manager.ValidateConfiguration()
+		assert.Error(t, err)
 	})
 }
 
@@ -166,7 +253,7 @@ func TestConfigValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			manager := NewConfigurationManager()
+			manager := NewConfigurationManager("")
 			err := manager.Set(tt.config)
 
 			if tt.wantErr {
