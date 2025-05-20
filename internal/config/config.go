@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
 	"gopkg.in/yaml.v2"
@@ -34,8 +33,31 @@ func (cm *ConfigurationManager) Set(config *hephaestus.SystemConfiguration) erro
 	return nil
 }
 
-// SaveConfigToFile saves the configuration to a file
-func SaveConfigToFile(config *hephaestus.SystemConfiguration, filePath string) error {
+// LoadConfig loads configuration from a file
+func LoadConfig(filePath string) (*hephaestus.SystemConfiguration, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %v", err)
+	}
+
+	config := &hephaestus.SystemConfiguration{}
+	if err := yaml.Unmarshal(data, config); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %v", err)
+	}
+
+	// Apply defaults for missing values
+	applyDefaults(config)
+
+	// Validate the configuration
+	if err := validateSystemConfiguration(config); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %v", err)
+	}
+
+	return config, nil
+}
+
+// SaveConfig saves the configuration to a file
+func SaveConfig(config *hephaestus.SystemConfiguration, filePath string) error {
 	if err := validateSystemConfiguration(config); err != nil {
 		return err
 	}
@@ -57,23 +79,12 @@ func SaveConfigToFile(config *hephaestus.SystemConfiguration, filePath string) e
 	return nil
 }
 
-// LoadConfigFromFile loads configuration from a file
-func LoadConfigFromFile(filePath string) (*hephaestus.SystemConfiguration, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %v", err)
+// GetConfigPath returns the path to the configuration file
+func GetConfigPath() string {
+	if path := os.Getenv("HEPHAESTUS_CONFIG"); path != "" {
+		return path
 	}
-
-	config := &hephaestus.SystemConfiguration{}
-	if err := yaml.Unmarshal(data, config); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config: %v", err)
-	}
-
-	if err := validateSystemConfiguration(config); err != nil {
-		return nil, err
-	}
-
-	return config, nil
+	return filepath.Join(os.Getenv("HOME"), ".hephaestus", "config.yaml")
 }
 
 // LoadConfigFromEnvironment loads configuration from environment variables
@@ -100,22 +111,8 @@ func LoadConfigFromEnvironment() *hephaestus.SystemConfiguration {
 		OperationalMode: os.Getenv("HEPHAESTUS_MODE"),
 	}
 
-	// Set defaults if not provided
-	if config.LoggingSettings.LogLevel == "" {
-		config.LoggingSettings.LogLevel = "info"
-	}
-	if config.LoggingSettings.OutputFormat == "" {
-		config.LoggingSettings.OutputFormat = "json"
-	}
-	if config.OperationalMode == "" {
-		config.OperationalMode = "suggest"
-	}
-	if config.RepositorySettings.FileLimit == 0 {
-		config.RepositorySettings.FileLimit = 10000
-	}
-	if config.RepositorySettings.FileSizeLimit == 0 {
-		config.RepositorySettings.FileSizeLimit = 1 << 20
-	}
+	// Apply defaults for missing values
+	applyDefaults(config)
 
 	return config
 }
@@ -123,6 +120,9 @@ func LoadConfigFromEnvironment() *hephaestus.SystemConfiguration {
 // GetDefaultConfig returns the default configuration
 func GetDefaultConfig() *hephaestus.SystemConfiguration {
 	return &hephaestus.SystemConfiguration{
+		RemoteSettings: hephaestus.RemoteRepositoryConfiguration{
+			TargetBranch: "main",
+		},
 		LoggingSettings: hephaestus.LoggingConfiguration{
 			LogLevel:     "info",
 			OutputFormat: "json",
@@ -133,14 +133,6 @@ func GetDefaultConfig() *hephaestus.SystemConfiguration {
 		},
 		OperationalMode: "suggest",
 	}
-}
-
-// GetConfigFilePath returns the path to the configuration file
-func GetConfigFilePath() string {
-	if path := os.Getenv("HEPHAESTUS_CONFIG"); path != "" {
-		return path
-	}
-	return filepath.Join(os.Getenv("HOME"), ".hephaestus", "config.yaml")
 }
 
 // validateSystemConfiguration validates the configuration
@@ -196,195 +188,24 @@ func validateSystemConfiguration(config *hephaestus.SystemConfiguration) error {
 	return nil
 }
 
-// LoadConfig loads the configuration from a YAML file
-func LoadConfig(path string) (*hephaestus.Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %v", err)
+// applyDefaults applies default values to missing configuration fields
+func applyDefaults(config *hephaestus.SystemConfiguration) {
+	if config.LoggingSettings.LogLevel == "" {
+		config.LoggingSettings.LogLevel = "info"
 	}
-
-	var config hephaestus.Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse config file: %v", err)
+	if config.LoggingSettings.OutputFormat == "" {
+		config.LoggingSettings.OutputFormat = "json"
 	}
-
-	if err := ValidateConfig(&config); err != nil {
-		return nil, fmt.Errorf("invalid configuration: %v", err)
+	if config.OperationalMode == "" {
+		config.OperationalMode = "suggest"
 	}
-
-	return &config, nil
-}
-
-// ValidateConfig validates the configuration
-func ValidateConfig(config *hephaestus.Config) error {
-	if config == nil {
-		return fmt.Errorf("config cannot be nil")
+	if config.RepositorySettings.FileLimit == 0 {
+		config.RepositorySettings.FileLimit = 10000
 	}
-
-	if err := validateRepositoryConfig(config.Repository); err != nil {
-		return fmt.Errorf("invalid repository configuration: %v", err)
+	if config.RepositorySettings.FileSizeLimit == 0 {
+		config.RepositorySettings.FileSizeLimit = 1 << 20
 	}
-
-	if err := validateModelConfig(config.Model); err != nil {
-		return fmt.Errorf("invalid model configuration: %v", err)
+	if config.RemoteSettings.TargetBranch == "" {
+		config.RemoteSettings.TargetBranch = "main"
 	}
-
-	if err := validateLogConfig(config.Log); err != nil {
-		return fmt.Errorf("invalid log configuration: %v", err)
-	}
-
-	return nil
-}
-
-// validateRepositoryConfig validates the repository configuration
-func validateRepositoryConfig(config *hephaestus.RepositoryConfig) error {
-	if config == nil {
-		return fmt.Errorf("repository configuration is required")
-	}
-
-	if config.Type == "" {
-		return fmt.Errorf("repository type is required")
-	}
-
-	if config.URL == "" {
-		return fmt.Errorf("repository url is not found")
-	}
-
-	if config.Token == "" {
-		return fmt.Errorf("repository token is required")
-	}
-
-	if config.Branch == "" {
-		return fmt.Errorf("repository branch is required")
-	}
-
-	if config.BasePath == "" {
-		return fmt.Errorf("base path is not found")
-	}
-
-	return nil
-}
-
-// validateModelConfig validates the model configuration
-func validateModelConfig(config *hephaestus.ModelConfig) error {
-	if config == nil {
-		return fmt.Errorf("model configuration is required")
-	}
-
-	if config.Provider == "" {
-		return fmt.Errorf("model provider is required")
-	}
-
-	if config.APIKey == "" {
-		return fmt.Errorf("model API key is required")
-	}
-
-	if config.Model == "" {
-		return fmt.Errorf("model specification is not found")
-	}
-
-	return nil
-}
-
-// validateModelConfig validates the model configuration
-func validateLogConfig(config *hephaestus.LogConfig) error {
-	if config == nil {
-		return fmt.Errorf("log configuration is required")
-	}
-
-	if config.Level == "" {
-		return fmt.Errorf("log level threshold is required")
-	}
-
-	if config.Output == "" {
-		return fmt.Errorf("log output format is required")
-	}
-
-	return nil
-}
-
-// SystemConfigurationFactory creates a SystemConfiguration from a Config with additional parameters
-func SystemConfigurationFactory(config *hephaestus.Config, operationalMode string) (*hephaestus.SystemConfiguration, error) {
-	if config == nil {
-		return nil, fmt.Errorf("config cannot be nil")
-	}
-
-	// Set default operational mode if not provided
-	if operationalMode == "" {
-		operationalMode = "suggest"
-	}
-
-	// Validate operational mode
-	validModes := map[string]bool{"suggest": true, "deploy": true}
-	if !validModes[operationalMode] {
-		return nil, fmt.Errorf("invalid operational mode: %s", operationalMode)
-	}
-
-	// Create SystemConfiguration
-	sysConfig := &hephaestus.SystemConfiguration{
-		// Convert Repository settings
-		RemoteSettings: hephaestus.RemoteRepositoryConfiguration{
-			AuthToken:       config.Repository.Token,
-			RepositoryOwner: extractOwnerFromURL(config.Repository.URL),
-			RepositoryName:  extractRepoFromURL(config.Repository.URL),
-			TargetBranch:    config.Repository.Branch,
-		},
-		// Convert Model settings
-		ModelSettings: hephaestus.ModelServiceConfiguration{
-			ServiceProvider: config.Model.Provider,
-			ServiceAPIKey:   config.Model.APIKey,
-			ModelVersion:    config.Model.Model,
-		},
-		// Convert Log settings
-		LoggingSettings: hephaestus.LoggingConfiguration{
-			LogLevel:     config.Log.Level,
-			OutputFormat: config.Log.Output,
-		},
-		// Set Repository settings
-		RepositorySettings: hephaestus.RepositoryConfiguration{
-			RepositoryPath: config.Repository.BasePath,
-			FileLimit:      10000,   // Default value
-			FileSizeLimit:  1 << 20, // Default 1MB
-		},
-		OperationalMode: operationalMode,
-	}
-
-	// Validate the created configuration
-	if err := validateSystemConfiguration(sysConfig); err != nil {
-		return nil, fmt.Errorf("invalid system configuration: %w", err)
-	}
-
-	return sysConfig, nil
-}
-
-// Helper function to extract owner from repository URL
-func extractOwnerFromURL(url string) string {
-	// Expected format: https://github.com/owner/repo
-	// or git@github.com:owner/repo.git
-	parts := strings.Split(url, "/")
-	if len(parts) < 2 {
-		return ""
-	}
-	// Handle SSH format
-	if strings.Contains(parts[0], "@") {
-		colonParts := strings.Split(parts[len(parts)-2], ":")
-		if len(colonParts) > 1 {
-			return colonParts[1]
-		}
-	}
-	// Handle HTTPS format
-	return parts[len(parts)-2]
-}
-
-// Helper function to extract repository name from URL
-func extractRepoFromURL(url string) string {
-	// Expected format: https://github.com/owner/repo
-	// or git@github.com:owner/repo.git
-	parts := strings.Split(url, "/")
-	if len(parts) < 1 {
-		return ""
-	}
-	repoName := parts[len(parts)-1]
-	// Remove .git suffix if present
-	return strings.TrimSuffix(repoName, ".git")
 }
