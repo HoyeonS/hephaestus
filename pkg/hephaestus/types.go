@@ -69,6 +69,19 @@ type Solution struct {
 	Confidence  float64   `json:"confidence"`
 }
 
+// Node processing hephaestus log ingestion flow
+type Node struct {
+	clientNodeConfig *ClientNodeConfiguration
+	status           NodeStatus
+	// Log processing
+	logBuffer     []LogEntry
+	lastProcessed time.Time
+
+	// Solution processing
+	solutionChan chan *Solution
+	errorChan    chan error
+}
+
 // Change represents a code change
 type Change struct {
 	FilePath    string `json:"file_path"`

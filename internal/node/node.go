@@ -8,28 +8,13 @@ import (
 	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
 )
 
-// Node represents a Hephaestus node
-type Node struct {
-	systemConfig     *hephaestus.SystemConfiguration
-	clientNodeConfig *hephaestus.ClientNodeConfiguration
-	status           hephaestus.NodeStatus
-	// Log processing
-	logBuffer     []hephaestus.LogEntry
-	lastProcessed time.Time
-
-	// Solution processing
-	solutionChan chan *hephaestus.Solution
-	errorChan    chan error
-}
-
 // NewNode creates a new Hephaestus node
 func NewNode(systemConfig *hephaestus.SystemConfiguration, clientNodeConfig *hephaestus.ClientNodeConfiguration) (*Node, error) {
 	if err := hephaestus.ValidateSystemConfiguration(systemConfig); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %v", err)
 	}
 
-	return &Node{
-		systemConfig:     systemConfig,
+	return &hephaestus.Node{
 		clientNodeConfig: clientNodeConfig,
 		status:           hephaestus.NodeStatusInitializing,
 		logBuffer:        make([]hephaestus.LogEntry, 0),
@@ -85,27 +70,21 @@ func (n *Node) shouldProcessLogs(entry hephaestus.LogEntry) bool {
 
 // triggerLogProcessing triggers log processing
 func (n *Node) triggerLogProcessing() error {
-	n.statusLock.Lock()
 	n.status = hephaestus.NodeStatusProcessing
-	n.statusLock.Unlock()
 
 	// Process logs in a separate goroutine
 	go func() {
 		defer func() {
-			n.statusLock.Lock()
 			n.status = hephaestus.NodeStatusOperational
-			n.statusLock.Unlock()
 		}()
 
 		// Clear buffer after processing
-		n.logBufferLock.Lock()
 		entries := make([]hephaestus.LogEntry, len(n.logBuffer))
 		copy(entries, n.logBuffer)
 		n.logBuffer = make([]hephaestus.LogEntry, 0)
-		n.logBufferLock.Unlock()
 
 		// Generate solution
-		solution, err := n.generateSolution(entries)
+		solution, err := n.initateSolutionFlow(entries)
 		if err != nil {
 			n.errorChan <- fmt.Errorf("failed to generate solution: %v", err)
 			return
@@ -119,7 +98,7 @@ func (n *Node) triggerLogProcessing() error {
 }
 
 // generateSolution generates a solution based on log entries
-func (n *Node) generateSolution(entries []hephaestus.LogEntry) (*hephaestus.Solution, error) {
+func (n *Node) initateSolutionFlow(entries []hephaestus.LogEntry) (*hephaestus.Solution, error) {
 	// TODO: Implement solution generation logic
 	return &hephaestus.Solution{
 		ID:          fmt.Sprintf("sol-%d", time.Now().UnixNano()),
@@ -128,51 +107,6 @@ func (n *Node) generateSolution(entries []hephaestus.LogEntry) (*hephaestus.Solu
 		GeneratedAt: time.Now(),
 		Confidence:  0.8,
 	}, nil
-}
-
-// processLogs continuously processes logs
-func (n *Node) processLogs(ctx context.Context) {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if n.shouldProcessLogs() {
-				if err := n.triggerLogProcessing(); err != nil {
-					n.errorChan <- fmt.Errorf("failed to trigger log processing: %v", err)
-				}
-			}
-		}
-	}
-}
-
-// processSolutions processes generated solutions
-func (n *Node) processSolutions(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case solution := <-n.solutionChan:
-			if err := n.handleSolution(solution); err != nil {
-				n.errorChan <- fmt.Errorf("failed to handle solution: %v", err)
-			}
-		}
-	}
-}
-
-// handleSolution handles a generated solution based on mode
-func (n *Node) handleSolution(solution *hephaestus.Solution) error {
-	switch n.config.OperationalMode {
-	case "suggest":
-		return n.handleSuggestMode(solution)
-	case "deploy":
-		return n.handleDeployMode(solution)
-	default:
-		return fmt.Errorf("unknown operational mode: %s", n.config.OperationalMode)
-	}
 }
 
 // handleSuggestMode handles solution in suggest mode
@@ -185,13 +119,6 @@ func (n *Node) handleSuggestMode(solution *hephaestus.Solution) error {
 func (n *Node) handleDeployMode(solution *hephaestus.Solution) error {
 	// TODO: Implement remote repository PR creation
 	return fmt.Errorf("deploy mode not implemented yet")
-}
-
-// GetStatus returns the current node status
-func (n *Node) GetStatus() hephaestus.NodeStatus {
-	n.statusLock.RLock()
-	defer n.statusLock.RUnlock()
-	return n.status
 }
 
 // GetErrors returns the error channel

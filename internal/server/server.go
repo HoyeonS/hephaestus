@@ -14,7 +14,7 @@ import (
 // Server implements the HephaestusService gRPC server
 type Server struct {
 	pb.UnimplementedHephaestusServiceServer
-	Node Node
+	nodeManager hephaestus.NodeManager
 }
 
 // NewServer creates a new instance of the HephaestusService server
