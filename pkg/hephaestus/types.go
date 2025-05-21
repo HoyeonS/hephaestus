@@ -43,12 +43,12 @@ type LogProcessingConfiguration struct {
 
 // Remote Repository Provider contains remote repository code base connection settings
 type RemoteRepositoryConfiguration struct {
-	RemoteRepositoryProvider string `json:"remote_repository_provider" yaml: "remote_repository_provider"`
-	RepositoryAddress        string `json:"address" yaml:"address"`
-	RemoteRepositoryOwner    string `json:"owner" yaml:"owner"`
-	RemoteRepositoryName     string `json:"repo_name" yaml:"repo_name"`
-	BaseDirectory            string `json:"base_dir" yaml:"base_dir"`
-	ProviderToken            string `json:"provider_token" yaml:"provider_token"`
+	RepositoryAddress      string `json:"address" yaml:"address"`
+	RemoteRepositoryOwner  string `json:"owner" yaml:"owner"`
+	RemoteRepositoryName   string `json:"repo_name" yaml:"repo_name"`
+	BaseDirectory          string `json:"base_dir" yaml:"base_dir"`
+	ProviderToken          string `json:"provider_token" yaml:"provider_token"`
+	RemoteRepositoryBranch string `json:"branch" yaml:"branch"`
 }
 
 // LogEntry represents a log entry

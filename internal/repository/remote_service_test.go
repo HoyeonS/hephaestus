@@ -49,7 +49,7 @@ func (m *MockGitHubClient) CreatePullRequest(ctx context.Context, owner, repo st
 func setupTestRemoteService() (*RemoteService, *MockGitHubClient) {
 	mockGitHubClient := new(MockGitHubClient)
 	service := NewRemoteService()
-	service.githubClient = mockGitHubClient
+	service.remoteRepositoryClient = Github.Client(mockGitHubClient)
 	return service, mockGitHubClient
 }
 
@@ -69,7 +69,7 @@ func TestInitialize(t *testing.T) {
 			Return(&github.Repository{Archived: github.Bool(false)}, &github.Response{}, nil)
 
 		err := service.Initialize(ctx, validConfig)
-		
+
 		assert.NoError(t, err)
 		assert.Equal(t, &validConfig, service.config)
 	})
@@ -79,7 +79,7 @@ func TestInitialize(t *testing.T) {
 		invalidConfig.AuthToken = ""
 
 		err := service.Initialize(ctx, invalidConfig)
-		
+
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "auth token is required")
 	})
@@ -89,7 +89,7 @@ func TestInitialize(t *testing.T) {
 		invalidConfig.RepositoryOwner = ""
 
 		err := service.Initialize(ctx, invalidConfig)
-		
+
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "repository owner and name are required")
 	})
@@ -99,7 +99,7 @@ func TestInitialize(t *testing.T) {
 			Return(&github.Repository{Archived: github.Bool(true)}, &github.Response{}, nil)
 
 		err := service.Initialize(ctx, validConfig)
-		
+
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "repository is archived")
 	})
@@ -125,7 +125,7 @@ func TestCreateRepository(t *testing.T) {
 			}, &github.Response{}, nil)
 
 		err := service.CreateRepository(ctx, nodeID)
-		
+
 		assert.NoError(t, err)
 		repo, exists := service.repositories[nodeID]
 		assert.True(t, exists)
@@ -137,7 +137,7 @@ func TestCreateRepository(t *testing.T) {
 
 	t.Run("Repository already exists", func(t *testing.T) {
 		err := service.CreateRepository(ctx, nodeID)
-		
+
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "repository already exists for node")
 	})
@@ -155,7 +155,7 @@ func TestGetRepository(t *testing.T) {
 		}
 
 		repo, err := service.GetRepository(ctx, nodeID)
-		
+
 		assert.NoError(t, err)
 		assert.NotNil(t, repo)
 		assert.Equal(t, "test-owner", repo.Owner)
@@ -164,7 +164,7 @@ func TestGetRepository(t *testing.T) {
 
 	t.Run("Get non-existent repository", func(t *testing.T) {
 		repo, err := service.GetRepository(ctx, "non-existent")
-		
+
 		assert.Error(t, err)
 		assert.Nil(t, repo)
 		assert.Contains(t, err.Error(), "repository not found for node")
@@ -194,7 +194,7 @@ func TestUpdateRepository(t *testing.T) {
 			}, &github.Response{}, nil)
 
 		err := service.UpdateRepository(ctx, nodeID)
-		
+
 		assert.NoError(t, err)
 		assert.Equal(t, "new-sha", service.repositories[nodeID].LastCommit)
 	})
@@ -204,7 +204,7 @@ func TestUpdateRepository(t *testing.T) {
 			Return(&github.Repository{Archived: github.Bool(true)}, &github.Response{}, nil)
 
 		err := service.UpdateRepository(ctx, nodeID)
-		
+
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "repository has been archived")
 		assert.True(t, service.repositories[nodeID].IsArchived)
@@ -212,7 +212,7 @@ func TestUpdateRepository(t *testing.T) {
 
 	t.Run("Non-existent repository", func(t *testing.T) {
 		err := service.UpdateRepository(ctx, "non-existent")
-		
+
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "repository not found for node")
 	})
@@ -249,7 +249,7 @@ func TestCreatePullRequest(t *testing.T) {
 			Return(&github.PullRequest{}, &github.Response{}, nil)
 
 		err := service.CreatePullRequest(ctx, nodeID, "Test PR", "Test description", changes)
-		
+
 		assert.NoError(t, err)
 	})
 
@@ -257,14 +257,14 @@ func TestCreatePullRequest(t *testing.T) {
 		service.repositories[nodeID].IsArchived = true
 
 		err := service.CreatePullRequest(ctx, nodeID, "Test PR", "Test description", changes)
-		
+
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "cannot create pull request for archived repository")
 	})
 
 	t.Run("Non-existent repository", func(t *testing.T) {
 		err := service.CreatePullRequest(ctx, "non-existent", "Test PR", "Test description", changes)
-		
+
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "repository not found for node")
 	})
@@ -282,7 +282,7 @@ func TestCleanup(t *testing.T) {
 		}
 
 		err := service.Cleanup(ctx, nodeID)
-		
+
 		assert.NoError(t, err)
 		_, exists := service.repositories[nodeID]
 		assert.False(t, exists)
@@ -290,8 +290,8 @@ func TestCleanup(t *testing.T) {
 
 	t.Run("Non-existent repository", func(t *testing.T) {
 		err := service.Cleanup(ctx, "non-existent")
-		
+
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "repository not found for node")
 	})
-} 
+}
