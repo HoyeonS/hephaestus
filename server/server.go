@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/HoyeonS/hephaestus/internal/logger"
+	"github.com/HoyeonS/hephaestus/logger"
 	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
 	pb "github.com/HoyeonS/hephaestus/proto"
 	"google.golang.org/grpc"
