@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/HoyeonS/hephaestus/internal/logger"
+
 	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
 	pb "github.com/HoyeonS/hephaestus/proto"
 	"google.golang.org/grpc"
@@ -14,7 +15,7 @@ import (
 // Server implements the HephaestusService gRPC server
 type Server struct {
 	pb.UnimplementedHephaestusServiceServer
-	nodeManager hephaestus.NodeManager
+	clientNode Node
 }
 
 // NewServer creates a new instance of the HephaestusService server
@@ -48,7 +49,7 @@ func (s *Server) Start(address string) error {
 func (s *Server) RegisterNode(ctx context.Context, req *pb.RegisterNodeRequest) (*pb.RegisterNodeResponse, error) {
 	logger.Info(ctx, "Registering node", logger.Field("node_id", req.NodeId))
 
-	node := &hephaestus.SystemNode{
+	node := &hephaestus.Node{
 		NodeID: req.NodeId,
 	}
 
