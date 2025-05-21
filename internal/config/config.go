@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
-	"time"
 
 	"github.com/HoyeonS/hephaestus/pkg/hephaestus"
 	"gopkg.in/yaml.v3"
@@ -14,7 +12,7 @@ import (
 // ConfigurationManager handles system configuration
 type ConfigurationManager struct {
 	nativeConfig *hephaestus.SystemConfiguration
-	clientConfig *hephaestus.ClientConfiguration
+	clientConfig *hephaestus.ClientNodeConfiguration
 	nativePath   string
 	clientPath   string
 }
@@ -39,7 +37,7 @@ func (m *ConfigurationManager) GetNativeConfig() *hephaestus.SystemConfiguration
 }
 
 // GetClientConfig returns the current client configuration
-func (m *ConfigurationManager) GetClientConfig() *hephaestus.ClientConfiguration {
+func (m *ConfigurationManager) GetClientConfig() *hephaestus.ClientNodeConfiguration {
 	return m.clientConfig
 }
 
@@ -58,12 +56,12 @@ func (m *ConfigurationManager) SetNativeConfig(config *hephaestus.SystemConfigur
 }
 
 // SetClientConfig updates the client configuration
-func (m *ConfigurationManager) SetClientConfig(config *hephaestus.ClientConfiguration) error {
+func (m *ConfigurationManager) SetClientConfig(config *hephaestus.ClientNodeConfiguration) error {
 	if config == nil {
 		return fmt.Errorf("configuration is nil")
 	}
 
-	if err := hephaestus.ValidateClientConfiguration(config); err != nil {
+	if err := hephaestus.ValidateClientNodeConfiguration(config); err != nil {
 		return fmt.Errorf("invalid configuration: %v", err)
 	}
 
@@ -78,7 +76,7 @@ func (m *ConfigurationManager) LoadConfiguration() error {
 		m.nativeConfig = GetDefaultNativeConfiguration()
 	}
 	if m.clientConfig == nil {
-		m.clientConfig = GetDefaultClientConfiguration()
+		return fmt.Errorf("failed to load client configuration: %v", hephaestus.ErrInvalidConfig)
 	}
 
 	// Load native configuration from file
@@ -117,14 +115,10 @@ func (m *ConfigurationManager) loadNativeConfigurationFromFile() error {
 func (m *ConfigurationManager) loadClientConfigurationFromFile() error {
 	data, err := os.ReadFile(m.clientPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			// If file doesn't exist, create with default configuration
-			return m.createDefaultClientConfiguration()
-		}
 		return fmt.Errorf("failed to read client configuration file: %v", err)
 	}
 
-	var config hephaestus.ClientConfiguration
+	var config hephaestus.ClientNodeConfiguration
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return fmt.Errorf("failed to parse client configuration file: %v", err)
 	}
@@ -200,15 +194,6 @@ func (m *ConfigurationManager) createDefaultNativeConfiguration() error {
 	return m.saveNativeConfiguration()
 }
 
-// createDefaultClientConfiguration creates a new client configuration file with default values
-func (m *ConfigurationManager) createDefaultClientConfiguration() error {
-	defaultConfig := GetDefaultClientConfiguration()
-	if err := m.SetClientConfig(defaultConfig); err != nil {
-		return err
-	}
-	return m.saveClientConfiguration()
-}
-
 // GetDefaultNativeConfigPath returns the default path for the native configuration file
 func GetDefaultNativeConfigPath() string {
 	home, err := os.UserHomeDir()
@@ -230,31 +215,14 @@ func GetDefaultClientConfigPath() string {
 // GetDefaultNativeConfiguration returns a default native configuration
 func GetDefaultNativeConfiguration() *hephaestus.SystemConfiguration {
 	return &hephaestus.SystemConfiguration{
-		Model: hephaestus.ModelConfiguration{
-			Provider:    "openai",
-			ModelVersion: "gpt-4",
+		ModelConfiguration: hephaestus.ModelConfiguration{
+			ModelServiceProvider: "openai",
+			ModelVersion:         "gpt-4",
 		},
-		LogSettings: hephaestus.LogProcessingConfiguration{
-			ThresholdLevel:  "error",
-			ThresholdCount:  5,
-			ThresholdWindow: 300 * time.Second,
+		LimitConfiguration: hephaestus.LimitConfiguration{
+			LogChunkLimit:      10,
+			FileNodeCountLimit: 1,
 		},
-		OperationalMode: "suggest",
-	}
-}
-
-// GetDefaultClientConfiguration returns a default client configuration
-func GetDefaultClientConfiguration() *hephaestus.ClientConfiguration {
-	return &hephaestus.ClientConfiguration{
-		Logging: hephaestus.LoggingConfiguration{
-			Level:  "info",
-			Format: "json",
-		},
-		Repository: hephaestus.RepositoryConfiguration{
-			FileLimit:     10000,
-			FileSizeLimit: 1048576, // 1MB
-		},
-		BaseURL: "http://localhost:8080",
 	}
 }
 
@@ -280,4 +248,3 @@ func (m *ConfigurationManager) ValidateConfiguration() error {
 
 	return nil
 }
- 
